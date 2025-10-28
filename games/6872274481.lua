@@ -1,6 +1,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -1216,6 +1217,7 @@ run(function()
 		if not (lplr.Character and lplr.Character:FindFirstChild("Head")) then return nil end
 		return (lplr.Character.Head.Position - gameCamera.CFrame.Position).Magnitude < 2
 	end
+	
 	local AimAssist
 	local Targets
 	local Sort
@@ -1227,6 +1229,12 @@ run(function()
 	local ClickAim
 	local ShopCheck
 	local FirstPersonCheck
+	local SmoothMode
+	local PredictMovement
+	local PredictionAmount
+	local VerticalAim
+	local VerticalOffset
+	local AimPart
 	
 	AimAssist = vape.Categories.Combat:CreateModule({
 		Name = 'AimAssist',
@@ -1234,6 +1242,15 @@ run(function()
 			if callback then
 				AimAssist:Clean(runService.Heartbeat:Connect(function(dt)
 					if entitylib.isAlive and store.hand.toolType == 'sword' and ((not ClickAim.Enabled) or (workspace:GetServerTimeNow() - bedwars.SwordController.lastAttack) < 0.4) then
+						if FirstPersonCheck.Enabled then
+							if not isFirstPerson() then return end
+						end
+						
+						if ShopCheck.Enabled then
+							local isShop = lplr:FindFirstChild("PlayerGui") and lplr:FindFirstChild("PlayerGui"):FindFirstChild("ItemShop")
+							if isShop then return end
+						end
+						
 						local ent = KillauraTarget.Enabled and store.KillauraTarget or entitylib.EntityPosition({
 							Range = Distance.Value,
 							Part = 'RootPart',
@@ -1242,15 +1259,8 @@ run(function()
 							NPCs = Targets.NPCs.Enabled,
 							Sort = sortmethods[Sort.Value]
 						})
-	
+						
 						if ent then
-							if FirstPersonCheck.Enabled then
-								if not isFirstPerson() then return end
-							end
-							if ShopCheck.Enabled then
-								local isShop = lplr:FindFirstChild("PlayerGui") and lplr:FindFirstChild("PlayerGui"):FindFirstChild("ItemShop") or nil
-								if isShop then return end
-							end
 							pcall(function()
 								local plr = ent
 								vapeTargetInfo.Targets.AimAssist = {
@@ -1261,12 +1271,46 @@ run(function()
 									Player = plr.Player
 								}
 							end)
+							
 							local delta = (ent.RootPart.Position - entitylib.character.RootPart.Position)
 							local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
 							local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
 							if angle >= (math.rad(AngleSlider.Value) / 2) then return end
+							
 							targetinfo.Targets[ent] = tick() + 1
-							gameCamera.CFrame = gameCamera.CFrame:Lerp(CFrame.lookAt(gameCamera.CFrame.p, ent.RootPart.Position), (AimSpeed.Value + (StrafeIncrease.Enabled and (inputService:IsKeyDown(Enum.KeyCode.A) or inputService:IsKeyDown(Enum.KeyCode.D)) and 10 or 0)) * dt)
+							
+							local aimPosition = ent.RootPart.Position
+							if AimPart.Value ~= "Root" then
+								local targetPart = ent.Character:FindFirstChild(AimPart.Value == "Head" and "Head" or "Torso")
+								if targetPart then
+									aimPosition = targetPart.Position
+								end
+							end
+							
+							if PredictMovement.Enabled and ent.RootPart:FindFirstChild("BodyVelocity") == nil then
+								local velocity = ent.RootPart.AssemblyLinearVelocity
+								local distance = (aimPosition - entitylib.character.RootPart.Position).Magnitude
+								local timeToReach = distance / 100
+								aimPosition = aimPosition + (velocity * timeToReach * PredictionAmount.Value)
+							end
+							
+							if VerticalAim.Enabled then
+								aimPosition = aimPosition + Vector3.new(0, VerticalOffset.Value, 0)
+							end
+							
+							local finalAimSpeed = AimSpeed.Value
+							if StrafeIncrease.Enabled and (inputService:IsKeyDown(Enum.KeyCode.A) or inputService:IsKeyDown(Enum.KeyCode.D)) then
+								finalAimSpeed = finalAimSpeed + 10
+							end
+							
+							if SmoothMode.Value == "Linear" then
+								gameCamera.CFrame = gameCamera.CFrame:Lerp(CFrame.lookAt(gameCamera.CFrame.p, aimPosition), finalAimSpeed * dt)
+							elseif SmoothMode.Value == "Elastic" then
+								local lerpAmount = 1 - math.exp(-finalAimSpeed * dt)
+								gameCamera.CFrame = gameCamera.CFrame:Lerp(CFrame.lookAt(gameCamera.CFrame.p, aimPosition), lerpAmount)
+							elseif SmoothMode.Value == "Instant" then
+								gameCamera.CFrame = CFrame.lookAt(gameCamera.CFrame.p, aimPosition)
+							end
 						end
 					end
 				end))
@@ -1274,59 +1318,127 @@ run(function()
 		end,
 		Tooltip = 'Smoothly aims to closest valid target with sword'
 	})
+	
 	Targets = AimAssist:CreateTargets({
 		Players = true, 
 		Walls = true
 	})
+	
 	local methods = {'Damage', 'Distance'}
 	for i in sortmethods do
 		if not table.find(methods, i) then
 			table.insert(methods, i)
 		end
 	end
+	
 	Sort = AimAssist:CreateDropdown({
 		Name = 'Target Mode',
 		List = methods
 	})
+	
 	AimSpeed = AimAssist:CreateSlider({
 		Name = 'Aim Speed',
 		Min = 1,
 		Max = 20,
 		Default = 6
 	})
+	
 	Distance = AimAssist:CreateSlider({
 		Name = 'Distance',
 		Min = 1,
 		Max = 30,
 		Default = 30,
-		Suffx = function(val) 
+		Suffix = function(val) 
 			return val == 1 and 'stud' or 'studs' 
 		end
 	})
+	
 	AngleSlider = AimAssist:CreateSlider({
 		Name = 'Max angle',
 		Min = 1,
 		Max = 360,
 		Default = 70
 	})
+	
+	SmoothMode = AimAssist:CreateDropdown({
+		Name = 'Smooth Mode',
+		List = {'Linear', 'Elastic', 'Instant'},
+		Default = 'Linear',
+		Tooltip = 'How the aim transitions to target'
+	})
+	
+	AimPart = AimAssist:CreateDropdown({
+		Name = 'Aim Part',
+		List = {'Root', 'Head', 'Torso'},
+		Default = 'Root',
+		Tooltip = 'Which body part to aim at'
+	})
+	
 	ClickAim = AimAssist:CreateToggle({
 		Name = 'Click Aim',
-		Default = true
+		Default = true,
+		Tooltip = 'Only aim when attacking'
 	})
+	
 	KillauraTarget = AimAssist:CreateToggle({
-		Name = 'Use killaura target'
+		Name = 'Use killaura target',
+		Tooltip = 'Locks onto killaura target instead of closest'
 	})
+	
+	PredictMovement = AimAssist:CreateToggle({
+		Name = 'Predict Movement',
+		Default = false,
+		Tooltip = 'Aims ahead of moving targets',
+		Function = function(callback)
+			PredictionAmount.Object.Visible = callback
+		end
+	})
+	
+	PredictionAmount = AimAssist:CreateSlider({
+		Name = 'Prediction',
+		Min = 0,
+		Max = 2,
+		Default = 1,
+		Decimal = 10,
+		Visible = false,
+		Tooltip = 'How much to predict movement'
+	})
+	
+	VerticalAim = AimAssist:CreateToggle({
+		Name = 'Vertical Offset',
+		Default = false,
+		Tooltip = 'Adjusts aim height up/down',
+		Function = function(callback)
+			VerticalOffset.Object.Visible = callback
+		end
+	})
+	
+	VerticalOffset = AimAssist:CreateSlider({
+		Name = 'Offset',
+		Min = -3,
+		Max = 3,
+		Default = 0,
+		Decimal = 10,
+		Visible = false,
+		Tooltip = 'Vertical aim adjustment'
+	})
+	
 	ShopCheck = AimAssist:CreateToggle({
 		Name = "Shop Check",
-		Function = function() end,
-		Default = false
+		Default = false,
+		Tooltip = 'Disables in shop GUI'
 	})
+	
 	FirstPersonCheck = AimAssist:CreateToggle({
 		Name = "First Person Check",
-		Function = function() end,
-		Default = false
+		Default = false,
+		Tooltip = 'Only works in first person'
 	})
-	StrafeIncrease = AimAssist:CreateToggle({Name = 'Strafe increase'})
+	
+	StrafeIncrease = AimAssist:CreateToggle({
+		Name = 'Strafe increase',
+		Tooltip = 'Faster aim when strafing (A/D)'
+	})
 end)
 	
 run(function()
