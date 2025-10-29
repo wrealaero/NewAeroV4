@@ -2,6 +2,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -2189,27 +2190,22 @@ run(function()
         AttackRemote = bedwars.Client:Get(remotes.AttackEntity)
     end)
 
-    -- Extended range functionality
     local function calculateExtendedAttackPosition(selfPos, targetPos, desiredRange)
         local currentDistance = (selfPos - targetPos).Magnitude
         if currentDistance <= desiredRange then
             return selfPos, targetPos
         end
 
-        -- Calculate direction vector
         local direction = (targetPos - selfPos).Unit
 
-        -- Calculate the extended self position (moving closer to target)
         local extendedSelfPos = targetPos - (direction * math.max(desiredRange - 0.1, 14.3))
 
-        -- Ensure we don't go through blocks by doing a simple raycast check
         local raycastParams = RaycastParams.new()
         raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
         raycastParams.FilterDescendantsInstances = {lplr.Character}
 
         local raycastResult = workspace:Raycast(selfPos, (extendedSelfPos - selfPos), raycastParams)
         if raycastResult then
-            -- If we hit something, adjust position to be just before the hit
             extendedSelfPos = raycastResult.Position - (direction * 1)
         end
 
@@ -2226,23 +2222,18 @@ run(function()
         local selfpos = attackTable.validate.selfPosition.value
         local targetpos = attackTable.validate.targetPosition.value
 
-        -- Store the original reach for display
         store.attackReach = ((selfpos - targetpos).Magnitude * 100) // 1 / 100
         store.attackReachUpdate = tick() + 1
 
-        -- Extended range calculation - this is the key modification
         local actualDistance = (selfpos - targetpos).Magnitude
         local attackRangeValue = AttackRange.Value
 
         if actualDistance > 14.4 and actualDistance <= attackRangeValue then
-            -- Calculate extended position for longer reach
             local newSelfPos, newTargetPos = calculateExtendedAttackPosition(selfpos, targetpos, math.min(actualDistance, 14.4))
 
-            -- Apply the extended positions
             attackTable.validate.selfPosition.value = newSelfPos
             attackTable.validate.targetPosition.value = newTargetPos
 
-            -- Modify raycast data for extended reach
             if Reach.Enabled or HitBoxes.Enabled then
                 attackTable.validate.raycast = attackTable.validate.raycast or {}
                 local lookDirection = CFrame.lookAt(newSelfPos, newTargetPos).LookVector
@@ -2252,7 +2243,6 @@ run(function()
                 attackTable.validate.raycast.cursorDirection.value = lookDirection
             end
         elseif actualDistance <= 14.4 then
-            -- Normal reach handling
             if Reach.Enabled or HitBoxes.Enabled then
                 attackTable.validate.raycast = attackTable.validate.raycast or {}
                 attackTable.validate.selfPosition.value += CFrame.lookAt(selfpos, targetpos).LookVector * math.max((selfpos - targetpos).Magnitude - 14.399, 0)
@@ -2498,14 +2488,12 @@ run(function()
                                     end
                                 end
 
-                                -- Extended range check - allow attacks up to AttackRange value
                                 if delta.Magnitude > AttackRange.Value then continue end
 
                                 local actualRoot = v.Character.PrimaryPart
                                 if actualRoot then
                                     local dir = CFrame.lookAt(selfpos, actualRoot.Position).LookVector
 
-                                    -- Use extended position calculation for longer reach
                                     local pos = selfpos
                                     local targetPos = actualRoot.Position
 
@@ -2621,7 +2609,7 @@ run(function()
     SwingRange = Killaura:CreateSlider({
         Name = 'Swing range',
         Min = 1,
-        Max = 35, -- Increased max range
+        Max = 35,
         Default = 18,
         Suffix = function(val)
             return val == 1 and 'stud' or 'studs'
@@ -2630,7 +2618,7 @@ run(function()
     AttackRange = Killaura:CreateSlider({
         Name = 'Attack range',
         Min = 1,
-        Max = 35, -- Increased max range
+        Max = 35, 
         Default = 18,
         Suffix = function(val)
             return val == 1 and 'stud' or 'studs'
