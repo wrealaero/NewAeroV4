@@ -2177,7 +2177,6 @@ run(function()
     local AnimationTween
     local Limit
     local LegitAura
-    local SyncHits
     local lastAttackTime = 0
     local lastManualSwing = 0
     local lastSwingServerTime = 0
@@ -2472,13 +2471,6 @@ run(function()
                                     end
                                 end
 
-                                if SyncHits.Enabled then
-                                    local timeSinceSwing = workspace:GetServerTimeNow() - bedwars.SwordController.lastSwing
-                                    if timeSinceSwing > 0.2 then
-                                        continue
-                                    end
-                                end
-
                                 local actualRoot = v.Character.PrimaryPart
                                 if actualRoot then
                                     local dir = CFrame.lookAt(selfpos, actualRoot.Position).LookVector
@@ -2665,10 +2657,6 @@ run(function()
         Default = 0.42,
         Decimal = 100,
         Visible = false
-    })
-    SyncHits = Killaura:CreateToggle({
-        Name = 'Sync Hits',
-        Tooltip = 'Sync killaura hits with sword animation'
     })
     Killaura:CreateToggle({
         Name = 'Show target',
