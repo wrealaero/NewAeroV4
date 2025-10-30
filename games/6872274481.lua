@@ -2192,22 +2192,23 @@ run(function()
 
     local function calculateExtendedAttackPosition(selfPos, targetPos, desiredRange)
         local currentDistance = (selfPos - targetPos).Magnitude
-        if currentDistance <= 14.4 then
+        if currentDistance <= desiredRange then
             return selfPos, targetPos
         end
-        
+
         local direction = (targetPos - selfPos).Unit
-        local extendedSelfPos = targetPos - (direction * 14.3)
-        
+
+        local extendedSelfPos = targetPos - (direction * math.max(desiredRange - 0.1, 14.3))
+
         local raycastParams = RaycastParams.new()
         raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
         raycastParams.FilterDescendantsInstances = {lplr.Character}
-        
+
         local raycastResult = workspace:Raycast(selfPos, (extendedSelfPos - selfPos), raycastParams)
         if raycastResult then
-            extendedSelfPos = raycastResult.Position - (direction * 2)
+            extendedSelfPos = raycastResult.Position - (direction * 1)
         end
-        
+
         return extendedSelfPos, targetPos
     end
 
@@ -2225,19 +2226,23 @@ run(function()
         store.attackReachUpdate = tick() + 1
 
         local actualDistance = (selfpos - targetpos).Magnitude
-        
-        if actualDistance > 14.4 then
-            local newSelfPos, newTargetPos = calculateExtendedAttackPosition(selfpos, targetpos, 14.4)
+        local attackRangeValue = AttackRange.Value
+
+        if actualDistance > 14.4 and actualDistance <= attackRangeValue then
+            local newSelfPos, newTargetPos = calculateExtendedAttackPosition(selfpos, targetpos, math.min(actualDistance, 14.4))
+
             attackTable.validate.selfPosition.value = newSelfPos
             attackTable.validate.targetPosition.value = newTargetPos
-            
-            if not attackTable.validate.raycast then
-                attackTable.validate.raycast = {}
+
+            if Reach.Enabled or HitBoxes.Enabled then
+                attackTable.validate.raycast = attackTable.validate.raycast or {}
+                local lookDirection = CFrame.lookAt(newSelfPos, newTargetPos).LookVector
+                attackTable.validate.raycast.cameraPosition = attackTable.validate.raycast.cameraPosition or {}
+                attackTable.validate.raycast.cameraPosition.value = newSelfPos
+                attackTable.validate.raycast.cursorDirection = attackTable.validate.raycast.cursorDirection or {}
+                attackTable.validate.raycast.cursorDirection.value = lookDirection
             end
-            local lookDirection = CFrame.lookAt(newSelfPos, newTargetPos).LookVector
-            attackTable.validate.raycast.cameraPosition = {value = newSelfPos}
-            attackTable.validate.raycast.cursorDirection = {value = lookDirection}
-        else
+        elseif actualDistance <= 14.4 then
             if Reach.Enabled or HitBoxes.Enabled then
                 attackTable.validate.raycast = attackTable.validate.raycast or {}
                 attackTable.validate.selfPosition.value += CFrame.lookAt(selfpos, targetpos).LookVector * math.max((selfpos - targetpos).Magnitude - 14.399, 0)
@@ -2270,7 +2275,7 @@ run(function()
                 RangeCirclePart.CanCollide = false
                 RangeCirclePart.Anchored = true
                 RangeCirclePart.Material = Enum.Material.Neon
-                RangeCirclePart.Size = Vector3.new(AttackRange.Value * 0.7, 0.01, AttackRange.Value * 0.7)
+                RangeCirclePart.Size = Vector3.new(SwingRange.Value * 0.7, 0.01, SwingRange.Value * 0.7)
                 if Killaura.Enabled then
                     RangeCirclePart.Parent = gameCamera
                 end
@@ -2321,6 +2326,18 @@ run(function()
             return sword, meta, true
         end
     end
+
+    local function handleGrandKillauraCooldown(delta)
+        if SwingTime.Enabled then
+            if delta.Magnitude < 14.4 and (tick() - swingCooldown) < math.max(SwingTimeSlider.Value, 0.02) then 
+                return false 
+            end
+            swingCooldown = tick()
+        end
+        return true
+    end
+
+    local OneTapCooldown = {Value = 5}
 
     local preserveSwordIcon = false
     local sigridcheck = false
@@ -2414,7 +2431,7 @@ run(function()
                         if sigridcheck and entitylib.isAlive and lplr.Character:FindFirstChild("elk") then return end
                         local isClaw = string.find(string.lower(tostring(sword and sword.itemType or "")), "summoner_claw")
                         local plrs = entitylib.AllPosition({
-                            Range = AttackRange.Value,
+                            Range = SwingRange.Value,
                             Wallcheck = Targets.Walls.Enabled or nil,
                             Part = 'RootPart',
                             Players = Targets.Players.Enabled,
@@ -2434,7 +2451,7 @@ run(function()
 
                                 table.insert(attacked, {
                                     Entity = v,
-                                    Check = BoxAttackColor
+                                    Check = delta.Magnitude > AttackRange.Value and BoxSwingColor or BoxAttackColor
                                 })
                                 targetinfo.Targets[v] = tick() + 1
                                 pcall(function()
@@ -2470,6 +2487,8 @@ run(function()
                                         end
                                     end
                                 end
+
+                                if delta.Magnitude > AttackRange.Value then continue end
 
                                 local actualRoot = v.Character.PrimaryPart
                                 if actualRoot then
@@ -3152,7 +3171,7 @@ run(function()
 	UpdateRate = Killaura:CreateSlider({
 		Name = 'Update rate',
 		Min = 1,
-		Max = 120,
+		Max = 240,
 		Default = 60,
 		Suffix = 'hz'
 	})
