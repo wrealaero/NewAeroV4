@@ -4025,14 +4025,20 @@ run(function()
 		end)
 	end
 	
-	local function getCrossbows()
-		local crossbows = {}
+	local function getBows()
+		local bows = {}
 		for i, v in store.inventory.hotbar do
-			if v.item and v.item.itemType:find('crossbow') and i ~= (store.inventory.hotbarSlot + 1) then 
-				table.insert(crossbows, i - 1) 
+			if v.item and v.item.itemType then
+				local itemMeta = bedwars.ItemMeta[v.item.itemType]
+				if itemMeta and itemMeta.projectileSource then
+					local projectileSource = itemMeta.projectileSource
+					if projectileSource.ammoItemTypes and table.find(projectileSource.ammoItemTypes, 'arrow') then
+						table.insert(bows, i - 1)
+					end
+				end
 			end
 		end
-		return crossbows
+		return bows
 	end
 	
 	local function getSwordSlot()
@@ -4055,19 +4061,18 @@ run(function()
 				old = bedwars.ProjectileController.createLocalProjectile
 				bedwars.ProjectileController.createLocalProjectile = function(...)
 					local source, data, proj = ...
-					if source and (proj == 'arrow' or proj == 'fireball') and not shooting then
+					if source and proj and (proj == 'arrow' or bedwars.ProjectileMeta[proj] and bedwars.ProjectileMeta[proj].combat) and not shooting then
 						task.spawn(function()
-							-- Killaura target check
 							if KillauraTargetCheck.Enabled and (not store.KillauraTarget) then
 								return
 							end
 							
-							local bows = getCrossbows()
+							local bows = getBows()
 							if #bows > 0 then
 								shooting = true
 								task.wait(0.15)
 								local selected = store.inventory.hotbarSlot
-								for _, v in getCrossbows() do
+								for _, v in bows do
 									if hotbarSwitch(v) then
 										task.wait(0.05)
 										leftClick()
@@ -4086,22 +4091,21 @@ run(function()
 					repeat
 						task.wait(0.1)
 						if autoShootEnabled and not shooting then
-							-- Killaura target check for interval shooting
 							if KillauraTargetCheck.Enabled and (not store.KillauraTarget) then
 								continue
 							end
 							
 							local currentTime = tick()
 							if (currentTime - lastAutoShootTime) >= AutoShootInterval.Value then
-								local crossbows = getCrossbows()
+								local bows = getBows()
 								local swordSlot = getSwordSlot()
 								
-								if #crossbows > 0 then
+								if #bows > 0 then
 									shooting = true
 									lastAutoShootTime = currentTime
 									local originalSlot = store.inventory.hotbarSlot
 									
-									for _, bowSlot in crossbows do
+									for _, bowSlot in bows do
 										if hotbarSwitch(bowSlot) then
 											task.wait(AutoShootSwitchSpeed.Value)
 											leftClick()
@@ -4129,7 +4133,7 @@ run(function()
 				shooting = false
 			end
 		end,
-		Tooltip = 'Automatically switches to crossbows and shoots them'
+		Tooltip = 'Automatically switches to bows and shoots them'
 	})
 	
 	AutoShootInterval = AutoShoot:CreateSlider({
@@ -4141,7 +4145,7 @@ run(function()
 		Suffix = function(val)
 			return val == 1 and 'second' or 'seconds'
 		end,
-		Tooltip = 'How often to auto-shoot crossbows'
+		Tooltip = 'How often to auto-shoot bows'
 	})
 	
 	AutoShootSwitchSpeed = AutoShoot:CreateSlider({
