@@ -3,6 +3,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -4145,9 +4146,9 @@ run(function()
 	
 	AutoShootInterval = AutoShoot:CreateSlider({
 		Name = 'Shoot Interval',
-		Min = 0.5,
-		Max = 30,
-		Default = 5,
+		Min = 0.1,
+		Max = 3,
+		Default = 0.5,
 		Decimal = 10,
 		Suffix = function(val)
 			return val == 1 and 'second' or 'seconds'
@@ -4158,7 +4159,7 @@ run(function()
 	AutoShootSwitchSpeed = AutoShoot:CreateSlider({
 		Name = 'Switch Delay',
 		Min = 0,
-		Max = 0.5,
+		Max = 0.2,
 		Default = 0.05,
 		Decimal = 100,
 		Suffix = 's',
