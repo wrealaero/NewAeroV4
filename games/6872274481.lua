@@ -5,6 +5,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -2179,6 +2180,7 @@ run(function()
     local AnimationTween
     local Limit
     local LegitAura
+    local SyncHits
     local lastAttackTime = 0
     local lastManualSwing = 0
     local lastSwingServerTime = 0
@@ -2414,11 +2416,35 @@ run(function()
                                         Player = plr.Player
                                     }
                                 end)
+                                
+                                local shouldAttack = delta.Magnitude <= AttackRange.Value
+                                
                                 if not Attacking then
                                     Attacking = true
                                     store.KillauraTarget = v
-                                    if not isClaw then
-                                        if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
+                                    
+                                    if SyncHits.Enabled and shouldAttack then
+                                        if not isClaw and not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
+                                            local swingSpeed = 0.25
+                                            if SwingTime.Enabled then
+                                                swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
+                                            elseif meta.sword.respectAttackSpeedForEffects then
+                                                swingSpeed = meta.sword.attackSpeed
+                                            end
+                                            AnimDelay = tick() + swingSpeed
+                                            bedwars.SwordController:playSwordEffect(meta, false)
+                                            if meta.displayName:find(' Scythe') then
+                                                bedwars.ScytheController:playLocalAnimation()
+                                            end
+
+                                            if vape.ThreadFix then
+                                                setthreadidentity(8)
+                                            end
+                                            
+                                            task.wait(0.2) 
+                                        end
+                                    else
+                                        if not isClaw and not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
                                             local swingSpeed = 0.25
                                             if SwingTime.Enabled then
                                                 swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
@@ -2438,7 +2464,7 @@ run(function()
                                     end
                                 end
 
-                                if delta.Magnitude > AttackRange.Value then continue end
+                                if not shouldAttack then continue end
 
                                 local actualRoot = v.Character.PrimaryPart
                                 if actualRoot then
@@ -2613,6 +2639,7 @@ run(function()
     Mouse = Killaura:CreateToggle({Name = 'Require mouse down'})
     Swing = Killaura:CreateToggle({Name = 'No Swing'})
     GUI = Killaura:CreateToggle({Name = 'GUI check'})
+    
     SwingTime = Killaura:CreateToggle({
         Name = 'Custom Swing Time',
         Function = function(callback)
@@ -2621,12 +2648,24 @@ run(function()
     })
     SwingTimeSlider = Killaura:CreateSlider({
         Name = 'Swing Time',
-        Min = 0,
+        Min = 0.1,
         Max = 1,
         Default = 0.42,
         Decimal = 100,
-        Visible = false
+        Visible = false,
+        Function = function(val)
+            if Killaura.Enabled then
+                Killaura:Toggle()
+                Killaura:Toggle()
+            end
+        end
     })
+    
+    SyncHits = Killaura:CreateToggle({
+        Name = 'Sync Hits',
+        Tooltip = 'Plays sword animation before attacking like normal killaura'
+    })
+    
     Killaura:CreateToggle({
         Name = 'Show target',
         Function = function(callback)
