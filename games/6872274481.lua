@@ -4,6 +4,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -2191,28 +2192,6 @@ run(function()
         AttackRemote = bedwars.Client:Get(remotes.AttackEntity)
     end)
 
-    local function calculateExtendedAttackPosition(selfPos, targetPos, desiredRange)
-        local currentDistance = (selfPos - targetPos).Magnitude
-        if currentDistance <= desiredRange then
-            return selfPos, targetPos
-        end
-
-        local direction = (targetPos - selfPos).Unit
-
-        local extendedSelfPos = targetPos - (direction * math.max(desiredRange - 0.1, 14.3))
-
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-        raycastParams.FilterDescendantsInstances = {lplr.Character}
-
-        local raycastResult = workspace:Raycast(selfPos, (extendedSelfPos - selfPos), raycastParams)
-        if raycastResult then
-            extendedSelfPos = raycastResult.Position - (direction * 1)
-        end
-
-        return extendedSelfPos, targetPos
-    end
-
     local function FireAttackRemote(attackTable, ...)
         if not AttackRemote then return end
 
@@ -2227,27 +2206,9 @@ run(function()
         store.attackReachUpdate = tick() + 1
 
         local actualDistance = (selfpos - targetpos).Magnitude
-        local attackRangeValue = AttackRange.Value
-
-        if actualDistance > 14.4 and actualDistance <= attackRangeValue then
-            local newSelfPos, newTargetPos = calculateExtendedAttackPosition(selfpos, targetpos, math.min(actualDistance, 14.4))
-
-            attackTable.validate.selfPosition.value = newSelfPos
-            attackTable.validate.targetPosition.value = newTargetPos
-
-            if Reach.Enabled or HitBoxes.Enabled then
-                attackTable.validate.raycast = attackTable.validate.raycast or {}
-                local lookDirection = CFrame.lookAt(newSelfPos, newTargetPos).LookVector
-                attackTable.validate.raycast.cameraPosition = attackTable.validate.raycast.cameraPosition or {}
-                attackTable.validate.raycast.cameraPosition.value = newSelfPos
-                attackTable.validate.raycast.cursorDirection = attackTable.validate.raycast.cursorDirection or {}
-                attackTable.validate.raycast.cursorDirection.value = lookDirection
-            end
-        elseif actualDistance <= 14.4 then
-            if Reach.Enabled or HitBoxes.Enabled then
-                attackTable.validate.raycast = attackTable.validate.raycast or {}
-                attackTable.validate.selfPosition.value += CFrame.lookAt(selfpos, targetpos).LookVector * math.max((selfpos - targetpos).Magnitude - 14.399, 0)
-            end
+        if actualDistance > 14.4 then
+            local direction = (targetpos - selfpos).Unit
+            attackTable.validate.selfPosition.value = selfpos + (direction * 2)
         end
 
         if suc and plr then
@@ -2327,18 +2288,6 @@ run(function()
             return sword, meta, true
         end
     end
-
-    local function handleGrandKillauraCooldown(delta)
-        if SwingTime.Enabled then
-            if delta.Magnitude < 14.4 and (tick() - swingCooldown) < math.max(SwingTimeSlider.Value, 0.02) then 
-                return false 
-            end
-            swingCooldown = tick()
-        end
-        return true
-    end
-
-    local OneTapCooldown = {Value = 5}
 
     local preserveSwordIcon = false
     local sigridcheck = false
@@ -2619,7 +2568,7 @@ run(function()
     AttackRange = Killaura:CreateSlider({
         Name = 'Attack range',
         Min = 1,
-        Max = 35, 
+        Max = 26, 
         Default = 18,
         Suffix = function(val)
             return val == 1 and 'stud' or 'studs'
@@ -4019,6 +3968,8 @@ run(function()
 	local shooting, old = false
 	local AutoShootInterval
 	local AutoShootSwitchSpeed
+	local AutoShootRange
+	local AutoShootFOV
 	local lastAutoShootTime = 0
 	local autoShootEnabled = false
 	local KillauraTargetCheck
@@ -4061,6 +4012,47 @@ run(function()
 		return nil
 	end
 	
+	local function hasValidTarget()
+		if KillauraTargetCheck.Enabled then
+			return store.KillauraTarget ~= nil
+		else
+			if not entitylib.isAlive then return false end
+			
+			local myPos = entitylib.character.RootPart.Position
+			local myLook = entitylib.character.RootPart.CFrame.LookVector
+			
+			for _, entity in entitylib.List do
+				if entity.Player == lplr then continue end
+				if not entity.Character then continue end
+				if not entity.RootPart then continue end
+				
+				if entity.Player then
+					if lplr:GetAttribute('Team') == entity.Player:GetAttribute('Team') then
+						continue
+					end
+				else
+					if not entity.Targetable then
+						continue
+					end
+				end
+				
+				local distance = (entity.RootPart.Position - myPos).Magnitude
+				if distance > AutoShootRange.Value then continue end
+				
+				local toTarget = (entity.RootPart.Position - myPos).Unit
+				local dot = myLook:Dot(toTarget)
+				local angle = math.acos(dot)
+				local fovRad = math.rad(AutoShootFOV.Value)
+				
+				if angle <= fovRad then
+					return true
+				end
+			end
+			
+			return false
+		end
+	end
+	
 	local AutoShoot = vape.Categories.Utility:CreateModule({
 		Name = 'AutoShoot',
 		Function = function(callback)
@@ -4071,8 +4063,14 @@ run(function()
 					local source, data, proj = ...
 					if source and proj and (proj == 'arrow' or bedwars.ProjectileMeta[proj] and bedwars.ProjectileMeta[proj].combat) and not shooting then
 						task.spawn(function()
-							if KillauraTargetCheck.Enabled and (not store.KillauraTarget) then
-								return
+							if KillauraTargetCheck.Enabled then
+								if not store.KillauraTarget then
+									return
+								end
+							else
+								if not hasValidTarget() then
+									return
+								end
 							end
 							
 							local bows = getBows()
@@ -4099,8 +4097,14 @@ run(function()
 					repeat
 						task.wait(0.1)
 						if autoShootEnabled and not shooting then
-							if KillauraTargetCheck.Enabled and (not store.KillauraTarget) then
-								continue
+							if KillauraTargetCheck.Enabled then
+								if not store.KillauraTarget then
+									continue
+								end
+							else
+								if not hasValidTarget() then
+									continue
+								end
 							end
 							
 							local currentTime = tick()
@@ -4166,10 +4170,29 @@ run(function()
 		Tooltip = 'Delay between switching and shooting (lower = faster)'
 	})
 	
+	AutoShootRange = AutoShoot:CreateSlider({
+		Name = 'Range',
+		Min = 1,
+		Max = 30,
+		Default = 20,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'Maximum range to auto-shoot'
+	})
+	
+	AutoShootFOV = AutoShoot:CreateSlider({
+		Name = 'FOV',
+		Min = 1,
+		Max = 180,
+		Default = 90,
+		Tooltip = 'Field of view for target detection (1-180 degrees)'
+	})
+	
 	KillauraTargetCheck = AutoShoot:CreateToggle({
 		Name = 'Require Killaura Target',
 		Default = false,
-		Tooltip = 'Only auto-shoot when Killaura has a target'
+		Tooltip = 'Only auto-shoot when Killaura has a target (overrides Range/FOV)'
 	})
 end)
 
