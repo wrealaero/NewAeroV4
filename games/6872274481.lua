@@ -9515,53 +9515,21 @@ run(function()
         Function = function(callback)
             if callback then
                 pcall(function()
-                    if bedwars.SwordController then
-                        local oldSwing = bedwars.SwordController.swingSwordAtMouse
-                        if oldSwing then
-                            debug.setconstant(oldSwing, 23, 'raycast')
-                            debug.setupvalue(oldSwing, 4, bedwars.QueryUtil)
-                        end
-                        
-                        local oldSwingRegion = bedwars.SwordController.swingSwordInRegion
-                        if oldSwingRegion then
-                            debug.setconstant(oldSwingRegion, 6, 5.5) 
-                        end
-                        
-                        if bedwars.ProjectileController then
-                            local oldProjectile = bedwars.ProjectileController.raycastProjectileHit
-                            if oldProjectile then
-                                debug.setupvalue(oldProjectile, 2, bedwars.QueryUtil)
-                            end
-                        end
+                    if bedwars.SwordController and bedwars.SwordController.swingSwordAtMouse then
+                        debug.setconstant(bedwars.SwordController.swingSwordAtMouse, 23, 'raycast')
+                        debug.setupvalue(bedwars.SwordController.swingSwordAtMouse, 4, bedwars.QueryUtil)
                     end
                 end)
-                notif('HitFix', 'Hit registration improved for high ping', 3)
             else
                 pcall(function()
-                    if bedwars.SwordController then
-                        local oldSwing = bedwars.SwordController.swingSwordAtMouse
-                        if oldSwing then
-                            debug.setconstant(oldSwing, 23, 'Raycast')
-                            debug.setupvalue(oldSwing, 4, workspace)
-                        end
-                        
-                        local oldSwingRegion = bedwars.SwordController.swingSwordInRegion
-                        if oldSwingRegion then
-                            debug.setconstant(oldSwingRegion, 6, 3.8)
-                        end
-                        
-                        if bedwars.ProjectileController then
-                            local oldProjectile = bedwars.ProjectileController.raycastProjectileHit
-                            if oldProjectile then
-                                debug.setupvalue(oldProjectile, 2, workspace)
-                            end
-                        end
+                    if bedwars.SwordController and bedwars.SwordController.swingSwordAtMouse then
+                        debug.setconstant(bedwars.SwordController.swingSwordAtMouse, 23, 'Raycast')
+                        debug.setupvalue(bedwars.SwordController.swingSwordAtMouse, 4, workspace)
                     end
                 end)
-                notif('HitFix', 'Hit registration restored to default', 3)
             end
         end,
-        Tooltip = 'Fixes hit registration issues, especially on high ping (100+)'
+        Tooltip = 'Fixes hit registration by changing raycast function'
     })
 end)
 	
