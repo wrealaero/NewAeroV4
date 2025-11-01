@@ -3846,48 +3846,51 @@ run(function()
 							end
 						end
 
-						if store.hand and store.hand.tool and store.hand.tool.Name:find("spellbook") then
-							local targetPos = plr.RootPart.Position
-							local selfPos = lplr.Character.PrimaryPart.Position
-							local expectedTime = (selfPos - targetPos).Magnitude / 160
-							targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
-							return {
-								initialVelocity = (targetPos - selfPos).Unit * 160,
-								positionFrom = offsetpos,
-								deltaT = 2,
-								gravitationalAcceleration = 1,
-								drawDurationSeconds = 5
-							}
-						elseif store.hand and store.hand.tool and store.hand.tool.Name:find("chakram") then
-							local targetPos = plr.RootPart.Position
-							local selfPos = lplr.Character.PrimaryPart.Position
-							local expectedTime = (selfPos - targetPos).Magnitude / 80
-							targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
-							return {
-								initialVelocity = (targetPos - selfPos).Unit * 80,
-								positionFrom = offsetpos,
-								deltaT = 2,
-								gravitationalAcceleration = 1,
-								drawDurationSeconds = 5
-							}
+						if store.hand and store.hand.tool then
+							if store.hand.tool.Name:find("spellbook") then
+								local targetPos = plr.RootPart.Position
+								local selfPos = lplr.Character.PrimaryPart.Position
+								local expectedTime = (selfPos - targetPos).Magnitude / 160
+								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
+								return {
+									initialVelocity = (targetPos - selfPos).Unit * 160,
+									positionFrom = offsetpos,
+									deltaT = 2,
+									gravitationalAcceleration = 1,
+									drawDurationSeconds = 5
+								}
+							elseif store.hand.tool.Name:find("chakram") then
+								local targetPos = plr.RootPart.Position
+								local selfPos = lplr.Character.PrimaryPart.Position
+								local expectedTime = (selfPos - targetPos).Magnitude / 80
+								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
+								return {
+									initialVelocity = (targetPos - selfPos).Unit * 80,
+									positionFrom = offsetpos,
+									deltaT = 2,
+									gravitationalAcceleration = 1,
+									drawDurationSeconds = 5
+								}
+							end
 						end
 						
 						local rawLook = CFrame.new(offsetpos, plr[TargetPart.Value].Position)
 						local distance = (plr[TargetPart.Value].Position - offsetpos).Magnitude
 						
-						local predictedPosition = prediction.predictStrafingMovement(plr.Player, plr[TargetPart.Value], projSpeed, gravity, offsetpos)
+						local predictedPosition = prediction.predictStrafingMovement(plr.Player, plr[TargetPart.Value], projSpeed, gravity, offsetpos, distance)
 						
 						local newlook = prediction.smoothAim(rawLook, predictedPosition, distance)
 						
 						if projmeta.projectile ~= 'owl_projectile' then
 							newlook = newlook * CFrame.new(
 								bedwars.BowConstantsTable.RelX or 0,
-								bedwars.BowConstantsTable.RelY or 0, 
+								(bedwars.BowConstantsTable.RelY or 0) - 0.15, 
 								bedwars.BowConstantsTable.RelZ or 0
 							)
 						end
 						
 						local targetVelocity = projmeta.projectile == 'telepearl' and Vector3.zero or plr[TargetPart.Value].Velocity
+						
 						local calc = prediction.SolveTrajectory(
 							newlook.p, 
 							projSpeed, 
@@ -3897,7 +3900,10 @@ run(function()
 							playerGravity, 
 							plr.HipHeight, 
 							plr.Jumping and 50 or nil,
-							rayCheck
+							rayCheck,
+							distance,
+							plr.Jumping,
+							plr.RootPart.Velocity.Y
 						)
 						
 						if calc then
