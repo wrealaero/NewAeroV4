@@ -74,6 +74,7 @@ local store = {
 }
 local Reach = {}
 local HitBoxes = {}
+local HitFix = {}
 local InfiniteFly = {}
 local TrapDisabler
 local AntiFallPart
@@ -2057,22 +2058,213 @@ end)
 run(function()
 	local Mode
 	local Expand
-	local objects, set = {}
+	local AutoToggle
+	local DisableNotifications
+	local objects, hitboxConnections = {}, {}
+	local HitBoxesEnabled = false
+	local hitboxCheckConnection = nil
+	local lastSwordState = false
 	
+	-- Improved sword detection
+	local function hasSwordEquipped()
+		if not store.hand or not store.hand.toolType then
+			return false
+		end
+		return store.hand.toolType == 'sword' or (store.tools.sword and store.tools.sword.tool)
+	end
+	
+	local function showHitboxNotification(title, message, duration)
+		if not DisableNotifications.Enabled then
+			notif(title, message, duration or 2)
+		end
+	end
+	
+	-- Improved hitbox creation with better collision handling
 	local function createHitbox(ent)
-		if ent.Targetable and ent.Player then
-			local hitbox = Instance.new('Part')
-			hitbox.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 5)
-			hitbox.Position = ent.RootPart.Position
-			hitbox.CanCollide = false
-			hitbox.Massless = true
-			hitbox.Transparency = 1
-			hitbox.Parent = ent.Character
-			local weld = Instance.new('Motor6D')
-			weld.Part0 = hitbox
-			weld.Part1 = ent.RootPart
-			weld.Parent = hitbox
-			objects[ent] = hitbox
+		if not ent or not ent.Targetable or not ent.Player or not ent.Character or not ent.RootPart then
+			return
+		end
+		
+		if objects[ent] then
+			removeHitbox(ent)
+		end
+		
+		local hitbox = Instance.new('Part')
+		hitbox.Name = 'VapeHitbox'
+		hitbox.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 10) -- More reasonable scaling
+		hitbox.Position = ent.RootPart.Position
+		hitbox.CanCollide = false
+		hitbox.Massless = true
+		hitbox.Transparency = 1
+		hitbox.Anchored = false
+		hitbox.CanQuery = false
+		hitbox.Parent = ent.Character
+		
+		-- Use WeldConstraint instead of Motor6D for better reliability
+		local weld = Instance.new('WeldConstraint')
+		weld.Part0 = hitbox
+		weld.Part1 = ent.RootPart
+		weld.Parent = hitbox
+		
+		-- Add to collection service for better tracking
+		collectionService:AddTag(hitbox, 'vape-hitbox')
+		
+		objects[ent] = hitbox
+	end
+	
+	local function removeHitbox(ent)
+		if objects[ent] then
+			objects[ent]:Destroy()
+			objects[ent] = nil
+		end
+	end
+	
+	local function updatePlayerHitboxes()
+		for ent, part in objects do
+			if part and part.Parent and ent.Character and ent.RootPart then
+				part.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 10)
+			else
+				-- Clean up invalid hitboxes
+				removeHitbox(ent)
+			end
+		end
+	end
+	
+	-- Improved sword hitbox with ping compensation
+	local function applySwordHitbox(enabled)
+		if not bedwars.SwordController or not bedwars.SwordController.swingSwordInRegion then
+			return
+		end
+		
+		if enabled then
+			-- More aggressive hitbox for high ping compensation
+			local expandedValue = math.min(Expand.Value / 3, 12) -- Cap at reasonable value
+			debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, expandedValue)
+			
+			-- Also modify attack entity remote for better high ping performance
+			if remotes.AttackEntity then
+				local attackRemote = bedwars.Client:Get(remotes.AttackEntity)
+				if attackRemote and attackRemote.instance then
+					-- This helps with timing issues on high ping
+					debug.setconstant(attackRemote.instance.InvokeServer, 5, 0.1) -- Increased timeout
+				end
+			end
+		else
+			debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, 3.8)
+		end
+	end
+	
+	local function enableHitboxes()
+		if Mode.Value == 'Sword' then
+			applySwordHitbox(true)
+			HitBoxesEnabled = true
+			showHitboxNotification('HitBoxes', 'Sword hitboxes enabled', 2)
+		else
+			-- Player mode
+			for _, conn in hitboxConnections do
+				conn:Disconnect()
+			end
+			table.clear(hitboxConnections)
+			
+			-- Set up entity tracking
+			table.insert(hitboxConnections, entitylib.Events.EntityAdded:Connect(function(ent)
+				if ent.Player and ent.Targetable then
+					task.wait(0.1) -- Small delay to ensure character is fully loaded
+					createHitbox(ent)
+				end
+			end))
+			
+			table.insert(hitboxConnections, entitylib.Events.EntityRemoving:Connect(function(ent)
+				removeHitbox(ent)
+			end))
+			
+			table.insert(hitboxConnections, entitylib.Events.EntityUpdated:Connect(function(ent)
+				if objects[ent] and ent.Player and ent.Targetable then
+					-- Update hitbox if entity properties change
+					task.defer(function()
+						if objects[ent] then
+							createHitbox(ent) -- Recreate to ensure proper positioning
+						end
+					end)
+				end
+			end))
+			
+			-- Create hitboxes for existing entities
+			for _, ent in entitylib.List do
+				if ent.Player and ent.Targetable then
+					createHitbox(ent)
+				end
+			end
+			
+			HitBoxesEnabled = true
+			showHitboxNotification('HitBoxes', 'Player hitboxes enabled', 2)
+		end
+	end
+	
+	local function disableHitboxes()
+		if Mode.Value == 'Sword' then
+			applySwordHitbox(false)
+		else
+			for ent, part in objects do
+				removeHitbox(ent)
+			end
+			table.clear(objects)
+		end
+		
+		for _, conn in hitboxConnections do
+			conn:Disconnect()
+		end
+		table.clear(hitboxConnections)
+		
+		HitBoxesEnabled = false
+		showHitboxNotification('HitBoxes', 'HitBoxes disabled', 2)
+	end
+	
+	-- Improved auto-toggle with better state management
+	local function setupAutoHitboxToggle()
+		if hitboxCheckConnection then
+			hitboxCheckConnection:Disconnect()
+		end
+		
+		hitboxCheckConnection = runService.Heartbeat:Connect(function()
+			if not HitBoxes.Enabled or not AutoToggle.Enabled then 
+				return 
+			end
+			
+			local hasSword = hasSwordEquipped()
+			
+			if hasSword ~= lastSwordState then
+				if hasSword then
+					if not HitBoxesEnabled then
+						enableHitboxes()
+						showHitboxNotification('Auto HitBox', 'HitBoxes enabled (sword equipped)', 2)
+					end
+				else
+					if HitBoxesEnabled then
+						disableHitboxes()
+						showHitboxNotification('Auto HitBox', 'HitBoxes disabled (no sword)', 2)
+					end
+				end
+				lastSwordState = hasSword
+			end
+		end)
+		
+		-- Initial state check
+		lastSwordState = hasSwordEquipped()
+		if lastSwordState and not HitBoxesEnabled then
+			enableHitboxes()
+		elseif not lastSwordState and HitBoxesEnabled then
+			disableHitboxes()
+		end
+	end
+	
+	local function updateHitboxSettings()
+		if HitBoxesEnabled then
+			if Mode.Value == 'Sword' then
+				applySwordHitbox(true)
+			elseif Mode.Value == 'Player' then
+				updatePlayerHitboxes()
+			end
 		end
 	end
 	
@@ -2080,66 +2272,80 @@ run(function()
 		Name = 'HitBoxes',
 		Function = function(callback)
 			if callback then
-				if Mode.Value == 'Sword' then
-					debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, (Expand.Value / 3))
-					set = true
+				if AutoToggle.Enabled then
+					setupAutoHitboxToggle()
 				else
-					HitBoxes:Clean(entitylib.Events.EntityAdded:Connect(createHitbox))
-					HitBoxes:Clean(entitylib.Events.EntityRemoving:Connect(function(ent)
-						if objects[ent] then
-							objects[ent]:Destroy()
-							objects[ent] = nil
-						end
-					end))
-					for _, ent in entitylib.List do
-						createHitbox(ent)
-					end
+					enableHitboxes()
 				end
 			else
-				if set then
-					debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, 3.8)
-					set = nil
+				disableHitboxes()
+				if hitboxCheckConnection then
+					hitboxCheckConnection:Disconnect()
+					hitboxCheckConnection = nil
 				end
-				for _, part in objects do
-					part:Destroy()
-				end
-				table.clear(objects)
+				lastSwordState = false
 			end
 		end,
-		Tooltip = 'Expands attack hitbox'
+		Tooltip = 'Expands attack hitbox - optimized for high ping'
 	})
+	
 	Mode = HitBoxes:CreateDropdown({
 		Name = 'Mode',
 		List = {'Sword', 'Player'},
 		Function = function()
 			if HitBoxes.Enabled then
 				HitBoxes:Toggle()
+				task.wait(0.1)
 				HitBoxes:Toggle()
 			end
 		end,
-		Tooltip = 'Sword - Increases the range around you to hit entities\nPlayer - Increases the players hitbox'
+		Tooltip = 'Sword: Increases attack radius around you\nPlayer: Increases individual player hitboxes'
 	})
+	
 	Expand = HitBoxes:CreateSlider({
 		Name = 'Expand amount',
 		Min = 0,
-		Max = 14.4,
-		Default = 14.4,
+		Max = 50, -- More reasonable max value
+		Default = 14,
 		Decimal = 10,
 		Function = function(val)
 			if HitBoxes.Enabled then
-				if Mode.Value == 'Sword' then
-					debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, (val / 3))
-				else
-					for _, part in objects do
-						part.Size = Vector3.new(3, 6, 3) + Vector3.one * (val / 5)
-					end
-				end
+				updateHitboxSettings()
 			end
 		end,
 		Suffix = function(val)
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
+	
+	AutoToggle = HitBoxes:CreateToggle({
+		Name = 'Auto Toggle',
+		Function = function(callback)
+			if callback and HitBoxes.Enabled then
+				setupAutoHitboxToggle()
+			else
+				if hitboxCheckConnection then
+					hitboxCheckConnection:Disconnect()
+					hitboxCheckConnection = nil
+				end
+			end
+		end,
+		Tooltip = 'Automatically enable/disable when equipping/unequipping swords'
+	})
+	
+	DisableNotifications = HitBoxes:CreateToggle({
+		Name = 'Disable Notifications',
+		Function = function() end,
+		Tooltip = 'Disables hitbox-related notifications'
+	})
+	
+	-- Cleanup when module is destroyed
+	vape:Clean(function()
+		disableHitboxes()
+		if hitboxCheckConnection then
+			hitboxCheckConnection:Disconnect()
+		end
+	end)
 end)
 	
 run(function()
@@ -9277,135 +9483,60 @@ run(function()
 		DefaultOpacity = 0.4
 	})
 end)
-	
-local HitFix = {}
+
 run(function()
-    local originalFunctions = {}
-    local originalReachDistance = nil
-    local OldGet = nil
-    
-    local function getPingCompensation()
-        local ping = 0
-        pcall(function()
-            local stats = game:GetService("Stats")
-            ping = stats.Network.ServerStatsItem["Data Ping"]:GetValue() or 0
-        end)
-        return math.min(ping / 100, 1.5)
-    end
-
-    local function hookClientGet()
-        if not bedwars.Client or OldGet then return end
-        
-        OldGet = bedwars.Client.Get
-        bedwars.Client.Get = function(self, remoteName)
-            local call = OldGet(self, remoteName)
-            
-            if remoteName == "AttackEntity" then
-                return {
-                    instance = call.instance,
-                    SendToServer = function(_, attackTable, ...)
-                        if attackTable and attackTable.validate and HitFix.Enabled then
-                            local selfpos = attackTable.validate.selfPosition and attackTable.validate.selfPosition.value
-                            local targetpos = attackTable.validate.targetPosition and attackTable.validate.targetPosition.value
-                            
-                            if selfpos and targetpos then
-                                local distance = (selfpos - targetpos).Magnitude
-                                local pingCompensation = getPingCompensation()
-                                
-                                local adjustmentDistance = math.max(distance - 12, 0) + (pingCompensation * 2)
-                                
-                                if adjustmentDistance > 0 then
-                                    attackTable.validate.raycast = attackTable.validate.raycast or {}
-                                    local direction = CFrame.lookAt(selfpos, targetpos).LookVector
-                                    attackTable.validate.selfPosition.value = selfpos + (direction * adjustmentDistance)
-                                    
-                                    if pingCompensation > 1 then
-                                        attackTable.validate.targetPosition.value = targetpos - (direction * math.min(pingCompensation * 0.5, 3))
-                                    end
-                                end
-                            end
-                        end
-                        return call:SendToServer(attackTable, ...)
-                    end
-                }
-            end
-            
-            return call
-        end
-    end
-
-    local function applyFunctionHook(enabled)
-        if not bedwars.SwordController then return end
-        
-        local functions = {"swingSwordAtMouse", "swingSwordInRegion", "attackEntity"}
-        for _, funcName in pairs(functions) do
-            local original = bedwars.SwordController[funcName]
-            if original then
-                if enabled then
-                    if not originalFunctions[funcName] then
-                        originalFunctions[funcName] = original
-                        bedwars.SwordController[funcName] = function(self, ...)
-                            local args = {...}
-                            return original(self, unpack(args))
-                        end
-                    end
-                else
-                    if originalFunctions[funcName] then
-                        bedwars.SwordController[funcName] = originalFunctions[funcName]
-                        originalFunctions[funcName] = nil
-                    end
-                end
-            end
-        end
-    end
-
-    local function applyDebugPatch(enabled)
-        pcall(function()
-            if bedwars.SwordController and bedwars.SwordController.swingSwordAtMouse then
-                debug.setconstant(bedwars.SwordController.swingSwordAtMouse, 23, enabled and 'raycast' or 'Raycast')
-                debug.setupvalue(bedwars.SwordController.swingSwordAtMouse, 4, enabled and bedwars.QueryUtil or workspace)
-            end
-        end)
-    end
-
-    local function applyReach(enabled)
-        pcall(function()
-            if bedwars and bedwars.CombatConstant then
-                if enabled then
-                    if originalReachDistance == nil then
-                        originalReachDistance = bedwars.CombatConstant.RAYCAST_SWORD_CHARACTER_DISTANCE
-                    end
-                    local pingMultiplier = getPingCompensation()
-                    local additionalReach = 3 * pingMultiplier
-                    bedwars.CombatConstant.RAYCAST_SWORD_CHARACTER_DISTANCE = 20 + math.min(additionalReach, 8)
-                else
-                    if originalReachDistance ~= nil then
-                        bedwars.CombatConstant.RAYCAST_SWORD_CHARACTER_DISTANCE = originalReachDistance
-                    end
-                end
-            end
-        end)
-    end
-
     HitFix = vape.Categories.Blatant:CreateModule({
         Name = 'HitFix',
         Function = function(callback)
             if callback then
-                hookClientGet()
-                applyFunctionHook(true)
-                applyDebugPatch(true)
-                applyReach(true)
+                pcall(function()
+                    if bedwars.SwordController then
+                        local oldSwing = bedwars.SwordController.swingSwordAtMouse
+                        if oldSwing then
+                            debug.setconstant(oldSwing, 23, 'raycast')
+                            debug.setupvalue(oldSwing, 4, bedwars.QueryUtil)
+                        end
+                        
+                        local oldSwingRegion = bedwars.SwordController.swingSwordInRegion
+                        if oldSwingRegion then
+                            debug.setconstant(oldSwingRegion, 6, 5.5) 
+                        end
+                        
+                        if bedwars.ProjectileController then
+                            local oldProjectile = bedwars.ProjectileController.raycastProjectileHit
+                            if oldProjectile then
+                                debug.setupvalue(oldProjectile, 2, bedwars.QueryUtil)
+                            end
+                        end
+                    end
+                end)
+                notif('HitFix', 'Hit registration improved for high ping', 3)
             else
-                if OldGet then
-                    bedwars.Client.Get = OldGet
-                    OldGet = nil
-                end
-                applyFunctionHook(false)
-                applyDebugPatch(false)
-                applyReach(false)
+                pcall(function()
+                    if bedwars.SwordController then
+                        local oldSwing = bedwars.SwordController.swingSwordAtMouse
+                        if oldSwing then
+                            debug.setconstant(oldSwing, 23, 'Raycast')
+                            debug.setupvalue(oldSwing, 4, workspace)
+                        end
+                        
+                        local oldSwingRegion = bedwars.SwordController.swingSwordInRegion
+                        if oldSwingRegion then
+                            debug.setconstant(oldSwingRegion, 6, 3.8)
+                        end
+                        
+                        if bedwars.ProjectileController then
+                            local oldProjectile = bedwars.ProjectileController.raycastProjectileHit
+                            if oldProjectile then
+                                debug.setupvalue(oldProjectile, 2, workspace)
+                            end
+                        end
+                    end
+                end)
+                notif('HitFix', 'Hit registration restored to default', 3)
             end
         end,
-        Tooltip = 'Fixes hit registration and improves reach'
+        Tooltip = 'Fixes hit registration issues, especially on high ping (100+)'
     })
 end)
 	
