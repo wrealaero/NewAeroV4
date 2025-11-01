@@ -2065,7 +2065,6 @@ run(function()
 	local hitboxCheckConnection = nil
 	local lastSwordState = false
 	
-	-- Improved sword detection
 	local function hasSwordEquipped()
 		if not store.hand or not store.hand.toolType then
 			return false
@@ -2079,7 +2078,6 @@ run(function()
 		end
 	end
 	
-	-- Improved hitbox creation with better collision handling
 	local function createHitbox(ent)
 		if not ent or not ent.Targetable or not ent.Player or not ent.Character or not ent.RootPart then
 			return
@@ -2091,7 +2089,7 @@ run(function()
 		
 		local hitbox = Instance.new('Part')
 		hitbox.Name = 'VapeHitbox'
-		hitbox.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 10) -- More reasonable scaling
+		hitbox.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 10) 
 		hitbox.Position = ent.RootPart.Position
 		hitbox.CanCollide = false
 		hitbox.Massless = true
@@ -2100,13 +2098,11 @@ run(function()
 		hitbox.CanQuery = false
 		hitbox.Parent = ent.Character
 		
-		-- Use WeldConstraint instead of Motor6D for better reliability
 		local weld = Instance.new('WeldConstraint')
 		weld.Part0 = hitbox
 		weld.Part1 = ent.RootPart
 		weld.Parent = hitbox
 		
-		-- Add to collection service for better tracking
 		collectionService:AddTag(hitbox, 'vape-hitbox')
 		
 		objects[ent] = hitbox
@@ -2124,29 +2120,24 @@ run(function()
 			if part and part.Parent and ent.Character and ent.RootPart then
 				part.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 10)
 			else
-				-- Clean up invalid hitboxes
 				removeHitbox(ent)
 			end
 		end
 	end
 	
-	-- Improved sword hitbox with ping compensation
 	local function applySwordHitbox(enabled)
 		if not bedwars.SwordController or not bedwars.SwordController.swingSwordInRegion then
 			return
 		end
 		
 		if enabled then
-			-- More aggressive hitbox for high ping compensation
-			local expandedValue = math.min(Expand.Value / 3, 12) -- Cap at reasonable value
+			local expandedValue = math.min(Expand.Value / 3, 12) 
 			debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, expandedValue)
 			
-			-- Also modify attack entity remote for better high ping performance
 			if remotes.AttackEntity then
 				local attackRemote = bedwars.Client:Get(remotes.AttackEntity)
 				if attackRemote and attackRemote.instance then
-					-- This helps with timing issues on high ping
-					debug.setconstant(attackRemote.instance.InvokeServer, 5, 0.1) -- Increased timeout
+					debug.setconstant(attackRemote.instance.InvokeServer, 5, 0.1) 
 				end
 			end
 		else
@@ -2160,16 +2151,14 @@ run(function()
 			HitBoxesEnabled = true
 			showHitboxNotification('HitBoxes', 'Sword hitboxes enabled', 2)
 		else
-			-- Player mode
 			for _, conn in hitboxConnections do
 				conn:Disconnect()
 			end
 			table.clear(hitboxConnections)
 			
-			-- Set up entity tracking
 			table.insert(hitboxConnections, entitylib.Events.EntityAdded:Connect(function(ent)
 				if ent.Player and ent.Targetable then
-					task.wait(0.1) -- Small delay to ensure character is fully loaded
+					task.wait(0.1) 
 					createHitbox(ent)
 				end
 			end))
@@ -2180,16 +2169,14 @@ run(function()
 			
 			table.insert(hitboxConnections, entitylib.Events.EntityUpdated:Connect(function(ent)
 				if objects[ent] and ent.Player and ent.Targetable then
-					-- Update hitbox if entity properties change
 					task.defer(function()
 						if objects[ent] then
-							createHitbox(ent) -- Recreate to ensure proper positioning
+							createHitbox(ent) 
 						end
 					end)
 				end
 			end))
 			
-			-- Create hitboxes for existing entities
 			for _, ent in entitylib.List do
 				if ent.Player and ent.Targetable then
 					createHitbox(ent)
@@ -2220,7 +2207,6 @@ run(function()
 		showHitboxNotification('HitBoxes', 'HitBoxes disabled', 2)
 	end
 	
-	-- Improved auto-toggle with better state management
 	local function setupAutoHitboxToggle()
 		if hitboxCheckConnection then
 			hitboxCheckConnection:Disconnect()
@@ -2249,7 +2235,6 @@ run(function()
 			end
 		end)
 		
-		-- Initial state check
 		lastSwordState = hasSwordEquipped()
 		if lastSwordState and not HitBoxesEnabled then
 			enableHitboxes()
@@ -2305,7 +2290,7 @@ run(function()
 	Expand = HitBoxes:CreateSlider({
 		Name = 'Expand amount',
 		Min = 0,
-		Max = 50, -- More reasonable max value
+		Max = 50,
 		Default = 14,
 		Decimal = 10,
 		Function = function(val)
@@ -2339,7 +2324,6 @@ run(function()
 		Tooltip = 'Disables hitbox-related notifications'
 	})
 	
-	-- Cleanup when module is destroyed
 	vape:Clean(function()
 		disableHitboxes()
 		if hitboxCheckConnection then
@@ -2402,6 +2386,42 @@ run(function()
         AttackRemote = bedwars.Client:Get(remotes.AttackEntity)
     end)
 
+    local function optimizeHitData(selfpos, targetpos, delta)
+        local direction = (targetpos - selfpos).Unit
+        local distance = (selfpos - targetpos).Magnitude
+        
+        local optimizedSelfPos = selfpos
+        local optimizedTargetPos = targetpos
+        
+        if distance > 18 then
+            optimizedSelfPos = selfpos + (direction * 2.2)
+            optimizedTargetPos = targetpos - (direction * 0.5)
+        elseif distance > 14.4 then
+            optimizedSelfPos = selfpos + (direction * 1.8)
+            optimizedTargetPos = targetpos - (direction * 0.3)
+        elseif distance > 10 then
+            optimizedSelfPos = selfpos + (direction * 1.2)
+        else
+            optimizedSelfPos = selfpos + (direction * 0.6)
+        end
+        
+        optimizedSelfPos = optimizedSelfPos + Vector3.new(0, 0.8, 0)
+        optimizedTargetPos = optimizedTargetPos + Vector3.new(0, 1.2, 0)
+        
+        return optimizedSelfPos, optimizedTargetPos, direction
+    end
+
+    local function getOptimizedAttackTiming()
+        local currentTime = tick()
+        local baseDelay = 0.11 
+        
+        if currentTime - lastAttackTime < baseDelay then
+            return false
+        end
+        
+        return true
+    end
+
     local function FireAttackRemote(attackTable, ...)
         if not AttackRemote then return end
 
@@ -2415,11 +2435,16 @@ run(function()
         store.attackReach = ((selfpos - targetpos).Magnitude * 100) // 1 / 100
         store.attackReachUpdate = tick() + 1
 
-        local actualDistance = (selfpos - targetpos).Magnitude
-        if actualDistance > 14.4 then
-            local direction = (targetpos - selfpos).Unit
-            attackTable.validate.selfPosition.value = selfpos + (direction * 2)
+        local optimizedSelfPos, optimizedTargetPos, direction = optimizeHitData(selfpos, targetpos, (selfpos - targetpos))
+        
+        attackTable.validate.selfPosition.value = optimizedSelfPos
+        attackTable.validate.targetPosition.value = optimizedTargetPos
+        
+        if not attackTable.validate.raycast then
+            attackTable.validate.raycast = {}
         end
+        attackTable.validate.raycast.cameraPosition = {value = optimizedSelfPos}
+        attackTable.validate.raycast.cursorDirection = {value = direction}
 
         if suc and plr then
             if not select(2, whitelist:get(plr)) then return end
