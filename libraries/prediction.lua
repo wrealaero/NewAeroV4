@@ -1,3 +1,4 @@
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local module = {}
 
 local movementHistory = {}
@@ -177,7 +178,7 @@ function module.solveQuartic(c0, c1, c2, c3, c4)
 	return {s3, s2, s1, s0}
 end
 
-function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params)
+function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params, distance, isJumping, verticalVelocity)
 	local disp = targetPos - origin
 	local p, q, r = targetVelocity.X, targetVelocity.Y, targetVelocity.Z
 	local h, j, k = disp.X, disp.Y, disp.Z
@@ -186,8 +187,22 @@ function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, tar
 	if math.abs(q) > 0.01 and playerGravity and playerGravity > 0 then
 		local estTime = (disp.Magnitude / projectileSpeed)
 		local origq = q
-		for i = 1, 100 do
+		
+		local isActualJump = verticalVelocity and verticalVelocity > 15
+		local isFallingFromJump = verticalVelocity and verticalVelocity < -25
+		local isFallingFromHeight = verticalVelocity and verticalVelocity < -50
+		
+		for i = 1, 50 do 
 			q = origq - (.5 * playerGravity) * estTime
+			
+			if isActualJump then
+				j = j - 1.5
+			elseif isFallingFromJump then
+				j = j + 1.0
+			elseif isFallingFromHeight then
+				j = j + 3.0
+			end
+			
 			local velo = targetVelocity * 0.016
 			local ray = workspace:Raycast(Vector3.new(targetPos.X, targetPos.Y, targetPos.Z), 
 				Vector3.new(velo.X, (q * estTime) - playerHeight, velo.Z), params)
@@ -228,7 +243,30 @@ function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, tar
 			local d = (h + p*t)/t
 			local e = (j + q*t - l*t*t)/t
 			local f = (k + r*t)/t
-			return origin + Vector3.new(d, e, f)
+			
+			local finalPos = origin + Vector3.new(d, e, f)
+			
+			if distance then
+				if distance < 20 then
+					finalPos = finalPos - Vector3.new(0, 0.5, 0)
+				elseif distance > 80 then
+					finalPos = finalPos + Vector3.new(0, 1.2, 0)
+				elseif distance > 40 then
+					finalPos = finalPos + Vector3.new(0, 0.8, 0)
+				end
+			end
+			
+			if verticalVelocity then
+				if verticalVelocity > 20 then 
+					finalPos = finalPos - Vector3.new(0, 1.0, 0)
+				elseif verticalVelocity < -30 then 
+					finalPos = finalPos + Vector3.new(0, 1.5, 0)
+				elseif verticalVelocity < -15 then 
+					finalPos = finalPos + Vector3.new(0, 0.8, 0)
+				end
+			end
+			
+			return finalPos
 		end
 	elseif gravity == 0 then
 		local t = (disp.Magnitude / projectileSpeed)
@@ -241,41 +279,41 @@ function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, tar
 	return targetPos
 end
 
-function module.predictStrafingMovement(targetPlayer, targetPart, projSpeed, gravity, origin)
+function module.predictStrafingMovement(targetPlayer, targetPart, projSpeed, gravity, origin, distance)
 	if not targetPlayer or not targetPlayer.Character or not targetPart then 
 		return targetPart and targetPart.Position or Vector3.zero
 	end
 	
 	local currentPos = targetPart.Position
 	local currentVel = targetPart.Velocity
-	local distance = (currentPos - origin).Magnitude
+	local dist = distance or (currentPos - origin).Magnitude
 	
-	local baseTimeToTarget = distance / projSpeed
+	local baseTimeToTarget = dist / projSpeed
 	
 	local timeMultiplier = 1.0
-	if distance > 120 then
-		timeMultiplier = 0.88
-	elseif distance > 80 then
-		timeMultiplier = 0.92
-	elseif distance > 50 then
-		timeMultiplier = 0.96
-	elseif distance < 15 then
-		timeMultiplier = 1.15
-	elseif distance < 25 then
-		timeMultiplier = 1.10
+	if dist > 120 then
+		timeMultiplier = 0.85
+	elseif dist > 80 then
+		timeMultiplier = 0.90
+	elseif dist > 50 then
+		timeMultiplier = 0.94
+	elseif dist < 15 then
+		timeMultiplier = 1.12
+	elseif dist < 25 then
+		timeMultiplier = 1.08
 	end
 	
 	local timeToTarget = baseTimeToTarget * timeMultiplier
 	
-	local horizontalPredictionStrength = 0.85
-	if distance > 90 then
-		horizontalPredictionStrength = 0.72
-	elseif distance > 60 then
+	local horizontalPredictionStrength = 0.82
+	if dist > 90 then
+		horizontalPredictionStrength = 0.75
+	elseif dist > 60 then
 		horizontalPredictionStrength = 0.78
-	elseif distance > 30 then
-		horizontalPredictionStrength = 0.82
-	elseif distance < 20 then
-		horizontalPredictionStrength = 0.90
+	elseif dist > 30 then
+		horizontalPredictionStrength = 0.80
+	elseif dist < 20 then
+		horizontalPredictionStrength = 0.88
 	end
 	
 	local horizontalVel = Vector3.new(currentVel.X, 0, currentVel.Z)
@@ -284,18 +322,30 @@ function module.predictStrafingMovement(targetPlayer, targetPart, projSpeed, gra
 	local verticalPrediction = 0
 	local verticalVel = currentVel.Y
 	
-	local isJumping = verticalVel > 22
-	local isFalling = verticalVel < -28
-	local isPeaking = math.abs(verticalVel) < 5 and verticalVel < 2
+	local isJumping = verticalVel > 18
+	local isStrongJump = verticalVel > 25
+	local isFallingFromJump = verticalVel < -20 and verticalVel > -40
+	local isFallingFromHeight = verticalVel < -40
+	local isPeaking = math.abs(verticalVel) < 8 and verticalVel < 3
 	
-	if isFalling then
-		verticalPrediction = verticalVel * timeToTarget * 0.45 + (-196.2 * 0.5 * timeToTarget * timeToTarget * 0.1)
+	if isFallingFromHeight then
+		verticalPrediction = verticalVel * timeToTarget * 0.25 + (-196.2 * 0.5 * timeToTarget * timeToTarget * 0.15)
+	elseif isFallingFromJump then
+		verticalPrediction = verticalVel * timeToTarget * 0.35 + (-196.2 * 0.5 * timeToTarget * timeToTarget * 0.08)
+	elseif isStrongJump then
+		verticalPrediction = verticalVel * timeToTarget * 0.25 + (-196.2 * 0.5 * timeToTarget * timeToTarget * 0.03)
 	elseif isJumping then
-		verticalPrediction = verticalVel * timeToTarget * 0.35 + (-196.2 * 0.5 * timeToTarget * timeToTarget * 0.05)
+		verticalPrediction = verticalVel * timeToTarget * 0.30 + (-196.2 * 0.5 * timeToTarget * timeToTarget * 0.04)
 	elseif isPeaking then
-		verticalPrediction = -4.5 * timeToTarget
+		verticalPrediction = -3.0 * timeToTarget
 	else
-		verticalPrediction = verticalVel * timeToTarget * 0.30
+		verticalPrediction = verticalVel * timeToTarget * 0.25
+	end
+	
+	if dist < 25 then
+		verticalPrediction = verticalPrediction * 0.7
+	elseif dist > 80 then
+		verticalPrediction = verticalPrediction * 1.2
 	end
 	
 	local finalPosition = currentPos + predictedHorizontal + Vector3.new(0, verticalPrediction, 0)
@@ -308,25 +358,30 @@ function module.predictStrafingMovement(targetPlayer, targetPart, projSpeed, gra
 	
 	local rayResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
 	if rayResult then
-		finalPosition = rayResult.Position - (rayDirection.Unit * 3)
+		finalPosition = rayResult.Position - (rayDirection.Unit * 2.5)
 	end
 	
 	return finalPosition
 end
 
 function module.smoothAim(currentCFrame, targetPosition, distance)
-	local smoothnessFactor = 0.78
+	local smoothnessFactor = 0.80
 	
 	if distance > 100 then
-		smoothnessFactor = 0.65
+		smoothnessFactor = 0.68
 	elseif distance > 70 then
-		smoothnessFactor = 0.70
+		smoothnessFactor = 0.72
 	elseif distance > 40 then
-		smoothnessFactor = 0.75
+		smoothnessFactor = 0.76
 	elseif distance < 15 then
-		smoothnessFactor = 0.85
+		smoothnessFactor = 0.88
 	elseif distance < 25 then
-		smoothnessFactor = 0.82
+		smoothnessFactor = 0.84
+	end
+	
+	local verticalDiff = math.abs(targetPosition.Y - currentCFrame.Position.Y)
+	if verticalDiff > 10 then
+		smoothnessFactor = math.min(smoothnessFactor + 0.05, 0.95)
 	end
 	
 	smoothnessFactor = math.clamp(smoothnessFactor, 0.1, 0.95)
