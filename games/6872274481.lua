@@ -8,6 +8,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -1227,7 +1228,6 @@ run(function()
 	
 	local function hasValidWeapon()
 		local toolType = store.hand.toolType
-		-- Check for projectile weapons or sword
 		return toolType == 'sword' or toolType == 'bow' or toolType == 'crossbow' or toolType == 'headhunter'
 	end
 	
@@ -2066,53 +2066,32 @@ run(function()
 	local Mode
 	local Expand
 	local AutoToggle
-	local DisableNotifications
-	local objects, hitboxConnections = {}, {}
+	local objects, set = {}
+	local hitboxConnections = {}
 	local HitBoxesEnabled = false
-	local hitboxCheckConnection = nil
+	local autoHitboxEnabled = false
 	local lastSwordState = false
+	local hitboxCheckConnection = nil
 	
 	local function hasSwordEquipped()
-		if not store.hand or not store.hand.toolType then
-			return false
-		end
-		return store.hand.toolType == 'sword' or (store.tools.sword and store.tools.sword.tool)
-	end
-	
-	local function showHitboxNotification(title, message, duration)
-		if not DisableNotifications.Enabled then
-			notif(title, message, duration or 2)
-		end
+		return store.hand.toolType == 'sword'
 	end
 	
 	local function createHitbox(ent)
-		if not ent or not ent.Targetable or not ent.Player or not ent.Character or not ent.RootPart then
-			return
+		if ent.Targetable and ent.Player then
+			local hitbox = Instance.new('Part')
+			hitbox.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 5)
+			hitbox.Position = ent.RootPart.Position
+			hitbox.CanCollide = false
+			hitbox.Massless = true
+			hitbox.Transparency = 1
+			hitbox.Parent = ent.Character
+			local weld = Instance.new('Motor6D')
+			weld.Part0 = hitbox
+			weld.Part1 = ent.RootPart
+			weld.Parent = hitbox
+			objects[ent] = hitbox
 		end
-		
-		if objects[ent] then
-			removeHitbox(ent)
-		end
-		
-		local hitbox = Instance.new('Part')
-		hitbox.Name = 'VapeHitbox'
-		hitbox.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 10) 
-		hitbox.Position = ent.RootPart.Position
-		hitbox.CanCollide = false
-		hitbox.Massless = true
-		hitbox.Transparency = 1
-		hitbox.Anchored = false
-		hitbox.CanQuery = false
-		hitbox.Parent = ent.Character
-		
-		local weld = Instance.new('WeldConstraint')
-		weld.Part0 = hitbox
-		weld.Part1 = ent.RootPart
-		weld.Parent = hitbox
-		
-		collectionService:AddTag(hitbox, 'vape-hitbox')
-		
-		objects[ent] = hitbox
 	end
 	
 	local function removeHitbox(ent)
@@ -2123,104 +2102,21 @@ run(function()
 	end
 	
 	local function updatePlayerHitboxes()
-		for ent, part in objects do
-			if part and part.Parent and ent.Character and ent.RootPart then
-				part.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 10)
-			else
-				removeHitbox(ent)
+		for _, part in objects do
+			if part and part.Parent then
+				part.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 5)
 			end
 		end
-	end
-	
-	local function applySwordHitbox(enabled)
-		if not bedwars.SwordController or not bedwars.SwordController.swingSwordInRegion then
-			return
-		end
-		
-		if enabled then
-			local expandedValue = math.min(Expand.Value / 3, 12) 
-			debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, expandedValue)
-			
-			if remotes.AttackEntity then
-				local attackRemote = bedwars.Client:Get(remotes.AttackEntity)
-				if attackRemote and attackRemote.instance then
-					debug.setconstant(attackRemote.instance.InvokeServer, 5, 0.1) 
-				end
-			end
-		else
-			debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, 3.8)
-		end
-	end
-	
-	local function enableHitboxes()
-		if Mode.Value == 'Sword' then
-			applySwordHitbox(true)
-			HitBoxesEnabled = true
-			showHitboxNotification('HitBoxes', 'Sword hitboxes enabled', 2)
-		else
-			for _, conn in hitboxConnections do
-				conn:Disconnect()
-			end
-			table.clear(hitboxConnections)
-			
-			table.insert(hitboxConnections, entitylib.Events.EntityAdded:Connect(function(ent)
-				if ent.Player and ent.Targetable then
-					task.wait(0.1) 
-					createHitbox(ent)
-				end
-			end))
-			
-			table.insert(hitboxConnections, entitylib.Events.EntityRemoving:Connect(function(ent)
-				removeHitbox(ent)
-			end))
-			
-			table.insert(hitboxConnections, entitylib.Events.EntityUpdated:Connect(function(ent)
-				if objects[ent] and ent.Player and ent.Targetable then
-					task.defer(function()
-						if objects[ent] then
-							createHitbox(ent) 
-						end
-					end)
-				end
-			end))
-			
-			for _, ent in entitylib.List do
-				if ent.Player and ent.Targetable then
-					createHitbox(ent)
-				end
-			end
-			
-			HitBoxesEnabled = true
-			showHitboxNotification('HitBoxes', 'Player hitboxes enabled', 2)
-		end
-	end
-	
-	local function disableHitboxes()
-		if Mode.Value == 'Sword' then
-			applySwordHitbox(false)
-		else
-			for ent, part in objects do
-				removeHitbox(ent)
-			end
-			table.clear(objects)
-		end
-		
-		for _, conn in hitboxConnections do
-			conn:Disconnect()
-		end
-		table.clear(hitboxConnections)
-		
-		HitBoxesEnabled = false
-		showHitboxNotification('HitBoxes', 'HitBoxes disabled', 2)
 	end
 	
 	local function setupAutoHitboxToggle()
 		if hitboxCheckConnection then
 			hitboxCheckConnection:Disconnect()
+			hitboxCheckConnection = nil
 		end
 		
 		hitboxCheckConnection = runService.Heartbeat:Connect(function()
-			if not HitBoxes.Enabled or not AutoToggle.Enabled then 
+			if not HitBoxes.Enabled or not autoHitboxEnabled or Mode.Value == 'Sword' then 
 				return 
 			end
 			
@@ -2229,13 +2125,28 @@ run(function()
 			if hasSword ~= lastSwordState then
 				if hasSword then
 					if not HitBoxesEnabled then
-						enableHitboxes()
-						showHitboxNotification('Auto HitBox', 'HitBoxes enabled (sword equipped)', 2)
+						for _, conn in hitboxConnections do
+							conn:Disconnect()
+						end
+						hitboxConnections = {}
+						table.insert(hitboxConnections, entitylib.Events.EntityAdded:Connect(createHitbox))
+						table.insert(hitboxConnections, entitylib.Events.EntityRemoving:Connect(removeHitbox))
+						for _, ent in entitylib.List do
+							createHitbox(ent)
+						end
+						HitBoxesEnabled = true
 					end
 				else
 					if HitBoxesEnabled then
-						disableHitboxes()
-						showHitboxNotification('Auto HitBox', 'HitBoxes disabled (no sword)', 2)
+						for _, part in objects do
+							part:Destroy()
+						end
+						table.clear(objects)
+						for _, conn in hitboxConnections do
+							conn:Disconnect()
+						end
+						table.clear(hitboxConnections)
+						HitBoxesEnabled = false
 					end
 				end
 				lastSwordState = hasSword
@@ -2243,20 +2154,28 @@ run(function()
 		end)
 		
 		lastSwordState = hasSwordEquipped()
-		if lastSwordState and not HitBoxesEnabled then
-			enableHitboxes()
-		elseif not lastSwordState and HitBoxesEnabled then
-			disableHitboxes()
-		end
-	end
-	
-	local function updateHitboxSettings()
-		if HitBoxesEnabled then
-			if Mode.Value == 'Sword' then
-				applySwordHitbox(true)
-			elseif Mode.Value == 'Player' then
-				updatePlayerHitboxes()
+		
+		if lastSwordState and not HitBoxesEnabled and Mode.Value == 'Player' then
+			for _, conn in hitboxConnections do
+				conn:Disconnect()
 			end
+			hitboxConnections = {}
+			table.insert(hitboxConnections, entitylib.Events.EntityAdded:Connect(createHitbox))
+			table.insert(hitboxConnections, entitylib.Events.EntityRemoving:Connect(removeHitbox))
+			for _, ent in entitylib.List do
+				createHitbox(ent)
+			end
+			HitBoxesEnabled = true
+		elseif not lastSwordState and HitBoxesEnabled and Mode.Value == 'Player' then
+			for _, part in objects do
+				part:Destroy()
+			end
+			table.clear(objects)
+			for _, conn in hitboxConnections do
+				conn:Disconnect()
+			end
+			table.clear(hitboxConnections)
+			HitBoxesEnabled = false
 		end
 	end
 	
@@ -2264,21 +2183,51 @@ run(function()
 		Name = 'HitBoxes',
 		Function = function(callback)
 			if callback then
-				if AutoToggle.Enabled then
-					setupAutoHitboxToggle()
+				if Mode.Value == 'Sword' then
+					debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, (Expand.Value / 3))
+					set = true
+					HitBoxesEnabled = true
+					
+					if autoHitboxEnabled then
+						notif('HitBoxes', 'Auto toggle only works in Player mode', 3, 'alert')
+					end
 				else
-					enableHitboxes()
+					if autoHitboxEnabled then
+						setupAutoHitboxToggle()
+					else
+						HitBoxes:Clean(entitylib.Events.EntityAdded:Connect(createHitbox))
+						HitBoxes:Clean(entitylib.Events.EntityRemoving:Connect(function(ent)
+							removeHitbox(ent)
+						end))
+						for _, ent in entitylib.List do
+							createHitbox(ent)
+						end
+						HitBoxesEnabled = true
+					end
 				end
 			else
-				disableHitboxes()
+				if set then
+					debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, 3.8)
+					set = nil
+				end
+				for _, part in objects do
+					part:Destroy()
+				end
+				table.clear(objects)
+				for _, conn in hitboxConnections do
+					conn:Disconnect()
+				end
+				table.clear(hitboxConnections)
 				if hitboxCheckConnection then
 					hitboxCheckConnection:Disconnect()
 					hitboxCheckConnection = nil
 				end
+				HitBoxesEnabled = false
+				autoHitboxEnabled = false
 				lastSwordState = false
 			end
 		end,
-		Tooltip = 'Expands attack hitbox - optimized for high ping'
+		Tooltip = 'Expands attack hitbox'
 	})
 	
 	Mode = HitBoxes:CreateDropdown({
@@ -2287,22 +2236,28 @@ run(function()
 		Function = function()
 			if HitBoxes.Enabled then
 				HitBoxes:Toggle()
-				task.wait(0.1)
 				HitBoxes:Toggle()
 			end
+			if autoHitboxEnabled and Mode.Value == 'Sword' then
+				notif('HitBoxes', 'Auto toggle only works in Player mode', 3, 'alert')
+			end
 		end,
-		Tooltip = 'Sword: Increases attack radius around you\nPlayer: Increases individual player hitboxes'
+		Tooltip = 'Sword - Increases the range around you to hit entities\nPlayer - Increases the players hitbox'
 	})
 	
 	Expand = HitBoxes:CreateSlider({
 		Name = 'Expand amount',
 		Min = 0,
-		Max = 50,
-		Default = 14,
+		Max = 50, 
+		Default = 14.4,
 		Decimal = 10,
 		Function = function(val)
 			if HitBoxes.Enabled then
-				updateHitboxSettings()
+				if Mode.Value == 'Sword' then
+					debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, (val / 3))
+				else
+					updatePlayerHitboxes()
+				end
 			end
 		end,
 		Suffix = function(val)
@@ -2313,30 +2268,36 @@ run(function()
 	AutoToggle = HitBoxes:CreateToggle({
 		Name = 'Auto Toggle',
 		Function = function(callback)
+			autoHitboxEnabled = callback
 			if callback and HitBoxes.Enabled then
-				setupAutoHitboxToggle()
-			else
-				if hitboxCheckConnection then
-					hitboxCheckConnection:Disconnect()
-					hitboxCheckConnection = nil
+				if Mode.Value == 'Sword' then
+					notif('HitBoxes', 'Auto toggle only works in Player mode', 3, 'alert')
+					AutoToggle:Toggle()
+					return
 				end
+				setupAutoHitboxToggle()
+			elseif HitBoxes.Enabled and Mode.Value == 'Player' then
+				for _, part in objects do
+					part:Destroy()
+				end
+				table.clear(objects)
+				for _, conn in hitboxConnections do
+					conn:Disconnect()
+				end
+				table.clear(hitboxConnections)
+				
+				HitBoxes:Clean(entitylib.Events.EntityAdded:Connect(createHitbox))
+				HitBoxes:Clean(entitylib.Events.EntityRemoving:Connect(function(ent)
+					removeHitbox(ent)
+				end))
+				for _, ent in entitylib.List do
+					createHitbox(ent)
+				end
+				HitBoxesEnabled = true
 			end
 		end,
-		Tooltip = 'Automatically enable/disable when equipping/unequipping swords'
+		Tooltip = 'Automatically turns hitboxes on/off when you equip/unequip swords (Player mode only)'
 	})
-	
-	DisableNotifications = HitBoxes:CreateToggle({
-		Name = 'Disable Notifications',
-		Function = function() end,
-		Tooltip = 'Disables hitbox-related notifications'
-	})
-	
-	vape:Clean(function()
-		disableHitboxes()
-		if hitboxCheckConnection then
-			hitboxCheckConnection:Disconnect()
-		end
-	end)
 end)
 	
 run(function()
