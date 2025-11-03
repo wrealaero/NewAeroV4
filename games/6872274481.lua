@@ -9,6 +9,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -2425,16 +2426,14 @@ run(function()
 			attackTable.validate.selfPosition = attackTable.validate.selfPosition or {value = selfpos}
 		end
 
-		if bedwars.SwordController then
-			bedwars.SwordController.lastAttack = workspace:GetServerTimeNow() - 0.3
-		end
-
 		if suc and plr then
 			if not select(2, whitelist:get(plr)) then return end
 		end
 
 		return AttackRemote:SendToServer(attackTable, ...)
 	end
+
+
 
     local lastSwingServerTime = 0
     local lastSwingServerTimeDelta = 0
@@ -2509,12 +2508,12 @@ run(function()
 	
 	local function resetSwordCooldown()
 		if bedwars.SwordController then
-			bedwars.SwordController.lastAttack = workspace:GetServerTimeNow() - 0.5
-			bedwars.SwordController.lastSwing = workspace:GetServerTimeNow() - 0.5
+			bedwars.SwordController.lastAttack = 0
+			bedwars.SwordController.lastSwing = 0
 			
 			if bedwars.SwordController.lastChargedAttackTimeMap then
 				for weaponName, _ in pairs(bedwars.SwordController.lastChargedAttackTimeMap) do
-					bedwars.SwordController.lastChargedAttackTimeMap[weaponName] = workspace:GetServerTimeNow() - 1
+					bedwars.SwordController.lastChargedAttackTimeMap[weaponName] = 0
 				end
 			end
 		end
@@ -2693,12 +2692,9 @@ run(function()
                                     local pos = selfpos
                                     local targetPos = actualRoot.Position
 
-                                    swingCooldown = tick()
-                                    bedwars.SwordController.lastAttack = workspace:GetServerTimeNow()
-                                    bedwars.SwordController.lastSwingServerTime = workspace:GetServerTimeNow()
-
-                                    lastSwingServerTimeDelta = workspace:GetServerTimeNow() - lastSwingServerTime
-                                    lastSwingServerTime = workspace:GetServerTimeNow()
+									swingCooldown = tick()
+									lastSwingServerTimeDelta = workspace:GetServerTimeNow() - lastSwingServerTime
+									lastSwingServerTime = workspace:GetServerTimeNow()
 
                                     store.attackReach = (delta.Magnitude * 100) // 1 / 100
                                     store.attackReachUpdate = tick() + 1
@@ -2737,11 +2733,6 @@ run(function()
 										attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
 										
 										FireAttackRemote(attackData)
-										
-										if bedwars.SwordController then
-											bedwars.SwordController.lastAttack = workspace:GetServerTimeNow()
-											bedwars.SwordController.lastSwing = workspace:GetServerTimeNow()
-										end
 									end
                                 end
                             end
