@@ -2390,36 +2390,51 @@ run(function()
         return true
     end
 
-    local function FireAttackRemote(attackTable, ...)
-        if not AttackRemote then return end
+	local function FireAttackRemote(attackTable, ...)
+		if not AttackRemote then return end
 
-        local suc, plr = pcall(function()
-            return playersService:GetPlayerFromCharacter(attackTable.entityInstance)
-        end)
+		local suc, plr = pcall(function()
+			return playersService:GetPlayerFromCharacter(attackTable.entityInstance)
+		end)
 
-        local selfpos = attackTable.validate.selfPosition.value
-        local targetpos = attackTable.validate.targetPosition.value
+		local selfpos = attackTable.validate.selfPosition.value
+		local targetpos = attackTable.validate.targetPosition.value
+		local actualDistance = (selfpos - targetpos).Magnitude
 
-        store.attackReach = ((selfpos - targetpos).Magnitude * 100) // 1 / 100
-        store.attackReachUpdate = tick() + 1
+		store.attackReach = (actualDistance * 100) // 1 / 100
+		store.attackReachUpdate = tick() + 1
 
-        local optimizedSelfPos, optimizedTargetPos, direction = optimizeHitData(selfpos, targetpos, (selfpos - targetpos))
-        
-        attackTable.validate.selfPosition.value = optimizedSelfPos
-        attackTable.validate.targetPosition.value = optimizedTargetPos
-        
-        if not attackTable.validate.raycast then
-            attackTable.validate.raycast = {}
-        end
-        attackTable.validate.raycast.cameraPosition = {value = optimizedSelfPos}
-        attackTable.validate.raycast.cursorDirection = {value = direction}
+		if actualDistance > 14.4 and actualDistance <= 30 then
+			local direction = (targetpos - selfpos).Unit
+			
+			local moveDistance = math.min(actualDistance - 14.3, 8) 
+			attackTable.validate.selfPosition.value = selfpos + (direction * moveDistance)
+			
+			local pullDistance = math.min(actualDistance - 14.3, 4)
+			attackTable.validate.targetPosition.value = targetpos - (direction * pullDistance)
+			
+			attackTable.validate.raycast = attackTable.validate.raycast or {}
+			attackTable.validate.raycast.cameraPosition = attackTable.validate.raycast.cameraPosition or {}
+			attackTable.validate.raycast.cursorDirection = attackTable.validate.raycast.cursorDirection or {}
+			
+			local extendedOrigin = selfpos + (direction * math.min(actualDistance - 12, 15))
+			attackTable.validate.raycast.cameraPosition.value = extendedOrigin
+			attackTable.validate.raycast.cursorDirection.value = direction
+			
+			attackTable.validate.targetPosition = attackTable.validate.targetPosition or {value = targetpos}
+			attackTable.validate.selfPosition = attackTable.validate.selfPosition or {value = selfpos}
+		end
 
-        if suc and plr then
-            if not select(2, whitelist:get(plr)) then return end
-        end
+		if bedwars.SwordController then
+			bedwars.SwordController.lastAttack = workspace:GetServerTimeNow() - 0.3
+		end
 
-        return AttackRemote:SendToServer(attackTable, ...)
-    end
+		if suc and plr then
+			if not select(2, whitelist:get(plr)) then return end
+		end
+
+		return AttackRemote:SendToServer(attackTable, ...)
+	end
 
     local lastSwingServerTime = 0
     local lastSwingServerTimeDelta = 0
@@ -2491,6 +2506,19 @@ run(function()
             return sword, meta, true
         end
     end
+	
+	local function resetSwordCooldown()
+		if bedwars.SwordController then
+			bedwars.SwordController.lastAttack = workspace:GetServerTimeNow() - 0.5
+			bedwars.SwordController.lastSwing = workspace:GetServerTimeNow() - 0.5
+			
+			if bedwars.SwordController.lastChargedAttackTimeMap then
+				for weaponName, _ in pairs(bedwars.SwordController.lastChargedAttackTimeMap) do
+					bedwars.SwordController.lastChargedAttackTimeMap[weaponName] = workspace:GetServerTimeNow() - 1
+				end
+			end
+		end
+	end
 
     local preserveSwordIcon = false
     local sigridcheck = false
@@ -2503,6 +2531,7 @@ run(function()
                 lastSwingServerTimeDelta = 0
                 lastAttackTime = 0
                 swingCooldown = 0
+				resetSwordCooldown() 
 
                 if RangeCircle.Enabled then
                     createRangeCircle()
@@ -2642,12 +2671,20 @@ run(function()
                                     end
                                 end
 
-                                if delta.Magnitude > AttackRange.Value then continue end
+								local canHit = delta.Magnitude <= AttackRange.Value
+								local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 5) 
 
-                                if SyncHits.Enabled then
-                                    local customSwingTime = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
-                                    if (tick() - swingCooldown) < math.max(customSwingTime, 0.02) then continue end
-                                end
+								if not canHit and not extendedRangeCheck then continue end
+
+								if SyncHits.Enabled then
+									local customSwingTime = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
+									local timeSinceLastSwing = tick() - swingCooldown
+									local requiredDelay = math.max(customSwingTime, 0.02)
+									
+									if timeSinceLastSwing < (requiredDelay - 0.05) and delta.Magnitude > 14.4 then 
+										continue 
+									end
+								end
 
                                 local actualRoot = v.Character.PrimaryPart
                                 if actualRoot then
@@ -2674,23 +2711,38 @@ run(function()
                                         end
                                     end
 
-                                    if isClaw then
-                                        KaidaController:request(v.Character)
-                                    else
-                                        FireAttackRemote({
-                                            weapon = sword.tool,
-                                            entityInstance = v.Character,
-                                            chargedAttack = {chargeRatio = 0},
-                                            validate = {
-                                                raycast = {
-                                                    cameraPosition = {value = pos},
-                                                    cursorDirection = {value = dir}
-                                                },
-                                                targetPosition = {value = targetPos},
-                                                selfPosition = {value = pos}
-                                            }
-                                        })
-                                    end
+									if isClaw then
+										KaidaController:request(v.Character)
+									else
+										local attackData = {
+											weapon = sword.tool,
+											entityInstance = v.Character,
+											chargedAttack = {chargeRatio = 0},
+											validate = {
+												raycast = {
+													cameraPosition = {value = pos},
+													cursorDirection = {value = dir}
+												},
+												targetPosition = {value = targetPos},
+												selfPosition = {value = pos}
+											}
+										}
+										
+										attackData.validate = attackData.validate or {}
+										attackData.validate.raycast = attackData.validate.raycast or {}
+										attackData.validate.targetPosition = attackData.validate.targetPosition or {value = targetPos}
+										attackData.validate.selfPosition = attackData.validate.selfPosition or {value = pos}
+										
+										attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
+										attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
+										
+										FireAttackRemote(attackData)
+										
+										if bedwars.SwordController then
+											bedwars.SwordController.lastAttack = workspace:GetServerTimeNow()
+											bedwars.SwordController.lastSwing = workspace:GetServerTimeNow()
+										end
+									end
                                 end
                             end
                         end
@@ -2766,24 +2818,24 @@ run(function()
             table.insert(methods, i)
         end
     end
-    SwingRange = Killaura:CreateSlider({
-        Name = 'Swing range',
-        Min = 1,
-        Max = 35,
-        Default = 18,
-        Suffix = function(val)
-            return val == 1 and 'stud' or 'studs'
-        end
-    })
-    AttackRange = Killaura:CreateSlider({
-        Name = 'Attack range',
-        Min = 1,
-        Max = 26, 
-        Default = 18,
-        Suffix = function(val)
-            return val == 1 and 'stud' or 'studs'
-        end
-    })
+	SwingRange = Killaura:CreateSlider({
+		Name = 'Swing range',
+		Min = 1,
+		Max = 40, 
+		Default = 22, 
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+	AttackRange = Killaura:CreateSlider({
+		Name = 'Attack range',
+		Min = 1,
+		Max = 35,
+		Default = 22, 
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
     RangeCircle = Killaura:CreateToggle({
         Name = "Range Visualiser",
         Function = function(call)
@@ -5462,44 +5514,7 @@ run(function()
 		Darker = true
 	})
 end)
-	
-run(function()
-	local AutoBalloon
-	
-	AutoBalloon = vape.Categories.Utility:CreateModule({
-		Name = 'AutoBalloon',
-		Function = function(callback)
-			if callback then
-				repeat task.wait() until store.matchState ~= 0 or (not AutoBalloon.Enabled)
-				if not AutoBalloon.Enabled then return end
-	
-				local lowestpoint = math.huge
-				for _, v in store.blocks do
-					local point = (v.Position.Y - (v.Size.Y / 2)) - 50
-					if point < lowestpoint then 
-						lowestpoint = point 
-					end
-				end
-	
-				repeat
-					if entitylib.isAlive then
-						if entitylib.character.RootPart.Position.Y < lowestpoint and (lplr.Character:GetAttribute('InflatedBalloons') or 0) < 3 then
-							local balloon = getItem('balloon')
-							if balloon then
-								for _ = 1, 3 do 
-									bedwars.BalloonController:inflateBalloon() 
-								end
-							end
-							task.wait(0.1)
-						end
-					end
-					task.wait(0.1)
-				until not AutoBalloon.Enabled
-			end
-		end,
-		Tooltip = 'Inflates when you fall into the void'
-	})
-end)
+
 	
 run(function()
 	local AutoKit
