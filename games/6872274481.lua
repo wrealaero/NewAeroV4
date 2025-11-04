@@ -2433,8 +2433,6 @@ run(function()
 		return AttackRemote:SendToServer(attackTable, ...)
 	end
 
-
-
     local lastSwingServerTime = 0
     local lastSwingServerTimeDelta = 0
 
@@ -4237,6 +4235,8 @@ run(function()
 	local autoShootEnabled = false
 	local KillauraTargetCheck
 	
+	_G.autoShootLock = _G.autoShootLock or false
+	
 	local VirtualInputManager = game:GetService("VirtualInputManager")
 	
 	local function leftClick()
@@ -4324,7 +4324,7 @@ run(function()
 				old = bedwars.ProjectileController.createLocalProjectile
 				bedwars.ProjectileController.createLocalProjectile = function(...)
 					local source, data, proj = ...
-					if source and proj and (proj == 'arrow' or bedwars.ProjectileMeta[proj] and bedwars.ProjectileMeta[proj].combat) and not shooting then
+					if source and proj and (proj == 'arrow' or bedwars.ProjectileMeta[proj] and bedwars.ProjectileMeta[proj].combat) and not _G.autoShootLock then
 						task.spawn(function()
 							if KillauraTargetCheck.Enabled then
 								if not store.KillauraTarget then
@@ -4338,7 +4338,7 @@ run(function()
 							
 							local bows = getBows()
 							if #bows > 0 then
-								shooting = true
+								_G.autoShootLock = true
 								task.wait(0.15)
 								local selected = store.inventory.hotbarSlot
 								for _, v in bows do
@@ -4349,7 +4349,7 @@ run(function()
 									end
 								end
 								hotbarSwitch(selected)
-								shooting = false
+								_G.autoShootLock = false
 							end
 						end)
 					end
@@ -4359,7 +4359,7 @@ run(function()
 				task.spawn(function()
 					repeat
 						task.wait(0.1)
-						if autoShootEnabled and not shooting then
+						if autoShootEnabled and not _G.autoShootLock then
 							if KillauraTargetCheck.Enabled then
 								if not store.KillauraTarget then
 									continue
@@ -4376,7 +4376,7 @@ run(function()
 								local swordSlot = getSwordSlot()
 								
 								if #bows > 0 then
-									shooting = true
+									_G.autoShootLock = true
 									lastAutoShootTime = currentTime
 									local originalSlot = store.inventory.hotbarSlot
 									
@@ -4394,7 +4394,7 @@ run(function()
 										hotbarSwitch(originalSlot)
 									end
 									
-									shooting = false
+									_G.autoShootLock = false
 								end
 							end
 						end
@@ -4405,7 +4405,7 @@ run(function()
 				if old then
 					bedwars.ProjectileController.createLocalProjectile = old
 				end
-				shooting = false
+				_G.autoShootLock = false
 			end
 		end,
 		Tooltip = 'Automatically switches to bows and shoots them'
@@ -4456,6 +4456,382 @@ run(function()
 		Name = 'Require Killaura Target',
 		Default = false,
 		Tooltip = 'Only auto-shoot when Killaura has a target (overrides Range/FOV)'
+	})
+end)
+
+run(function()
+	local AutoGloopInterval
+	local AutoGloopSwitchSpeed
+	local AutoGloopRange
+	local AutoGloopFOV
+	local lastAutoGloopTime = 0
+	local autoGloopEnabled = false
+	local GloopKillauraTargetCheck
+	
+	local VirtualInputManager = game:GetService("VirtualInputManager")
+	
+	local function leftClick()
+		pcall(function()
+			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+			task.wait(0.05)
+			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+		end)
+	end
+	
+	local function getGloopSlots()
+		local gloops = {}
+		for i, v in store.inventory.hotbar do
+			if v.item and v.item.itemType then
+				if v.item.itemType == 'glue_projectile' then
+					table.insert(gloops, i - 1)
+				end
+			end
+		end
+		return gloops
+	end
+	
+	local function getSwordSlot()
+		for i, v in store.inventory.hotbar do
+			if v.item and bedwars.ItemMeta[v.item.itemType] then
+				local meta = bedwars.ItemMeta[v.item.itemType]
+				if meta.sword then
+					return i - 1
+				end
+			end
+		end
+		return nil
+	end
+	
+	local function getClosestTargetDistance()
+		if not entitylib.isAlive then return math.huge end
+		
+		local myPos = entitylib.character.RootPart.Position
+		local myLook = entitylib.character.RootPart.CFrame.LookVector
+		local closestDist = math.huge
+		
+		for _, entity in entitylib.List do
+			if entity.Player == lplr then continue end
+			if not entity.Character then continue end
+			if not entity.RootPart then continue end
+			
+			if entity.Player then
+				if lplr:GetAttribute('Team') == entity.Player:GetAttribute('Team') then
+					continue
+				end
+			else
+				if not entity.Targetable then
+					continue
+				end
+			end
+			
+			local distance = (entity.RootPart.Position - myPos).Magnitude
+			if distance > AutoGloopRange.Value then continue end
+			
+			local toTarget = (entity.RootPart.Position - myPos).Unit
+			local dot = myLook:Dot(toTarget)
+			local angle = math.acos(dot)
+			local fovRad = math.rad(AutoGloopFOV.Value)
+			
+			if angle <= fovRad then
+				closestDist = math.min(closestDist, distance)
+			end
+		end
+		
+		return closestDist
+	end
+	
+	local function hasValidTarget()
+		if GloopKillauraTargetCheck.Enabled then
+			return store.KillauraTarget ~= nil
+		else
+			return getClosestTargetDistance() <= AutoGloopRange.Value
+		end
+	end
+	
+	local AutoGloop = vape.Categories.Utility:CreateModule({
+		Name = 'AutoGloop',
+		Function = function(callback)
+			if callback then
+				autoGloopEnabled = true
+				
+				task.spawn(function()
+					repeat
+						task.wait(0.1)
+						if autoGloopEnabled and not _G.autoShootLock then
+							if not hasValidTarget() then
+								continue
+							end
+							
+							local closestDist = getClosestTargetDistance()
+							if closestDist > 10 then
+								continue
+							end
+							
+							local currentTime = tick()
+							if (currentTime - lastAutoGloopTime) >= AutoGloopInterval.Value then
+								local gloops = getGloopSlots()
+								local swordSlot = getSwordSlot()
+								
+								if #gloops > 0 then
+									_G.autoShootLock = true
+									lastAutoGloopTime = currentTime
+									local originalSlot = store.inventory.hotbarSlot
+									
+									for _, gloopSlot in gloops do
+										if hotbarSwitch(gloopSlot) then
+											task.wait(AutoGloopSwitchSpeed.Value)
+											leftClick()
+											task.wait(0.05)
+										end
+									end
+									
+									if swordSlot then
+										hotbarSwitch(swordSlot)
+									else
+										hotbarSwitch(originalSlot)
+									end
+									
+									_G.autoShootLock = false
+								end
+							end
+						end
+					until not autoGloopEnabled
+				end)
+			else
+				autoGloopEnabled = false
+			end
+		end,
+		Tooltip = 'Automatically throws gloop at close range enemies (under 12 studs)'
+	})
+	
+	AutoGloopInterval = AutoGloop:CreateSlider({
+		Name = 'Throw Interval',
+		Min = 0.1,
+		Max = 16,
+		Default = 0.8,
+		Decimal = 10,
+		Suffix = function(val)
+			return val == 1 and 'second' or 'seconds'
+		end,
+		Tooltip = 'How often to throw gloop'
+	})
+	
+	AutoGloopSwitchSpeed = AutoGloop:CreateSlider({
+		Name = 'Switch Delay',
+		Min = 0,
+		Max = 0.2,
+		Default = 0.05,
+		Decimal = 100,
+		Suffix = 's',
+		Tooltip = 'Delay between switching and throwing (lower = faster)'
+	})
+	
+	AutoGloopRange = AutoGloop:CreateSlider({
+		Name = 'Range',
+		Min = 1,
+		Max = 30,
+		Default = 15,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'Maximum range to detect targets'
+	})
+	
+	AutoGloopFOV = AutoGloop:CreateSlider({
+		Name = 'FOV',
+		Min = 1,
+		Max = 180,
+		Default = 90,
+		Tooltip = 'Field of view for target detection (1-180 degrees)'
+	})
+	
+	GloopKillauraTargetCheck = AutoGloop:CreateToggle({
+		Name = 'Require Killaura Target',
+		Default = false,
+		Tooltip = 'Only throw gloop when Killaura has a target'
+	})
+end)
+
+run(function()
+	local AutoFireballInterval
+	local AutoFireballSwitchSpeed
+	local AutoFireballRange
+	local AutoFireballFOV
+	local lastAutoFireballTime = 0
+	local autoFireballEnabled = false
+	local FireballKillauraTargetCheck
+	
+	local VirtualInputManager = game:GetService("VirtualInputManager")
+	
+	local function leftClick()
+		pcall(function()
+			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+			task.wait(0.05)
+			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+		end)
+	end
+	
+	local function getFireballSlots()
+		local fireballs = {}
+		for i, v in store.inventory.hotbar do
+			if v.item and v.item.itemType then
+				if v.item.itemType == 'fireball' then
+					table.insert(fireballs, i - 1)
+				end
+			end
+		end
+		return fireballs
+	end
+	
+	local function getSwordSlot()
+		for i, v in store.inventory.hotbar do
+			if v.item and bedwars.ItemMeta[v.item.itemType] then
+				local meta = bedwars.ItemMeta[v.item.itemType]
+				if meta.sword then
+					return i - 1
+				end
+			end
+		end
+		return nil
+	end
+	
+	local function hasValidTarget()
+		if FireballKillauraTargetCheck.Enabled then
+			return store.KillauraTarget ~= nil
+		else
+			if not entitylib.isAlive then return false end
+			
+			local myPos = entitylib.character.RootPart.Position
+			local myLook = entitylib.character.RootPart.CFrame.LookVector
+			
+			for _, entity in entitylib.List do
+				if entity.Player == lplr then continue end
+				if not entity.Character then continue end
+				if not entity.RootPart then continue end
+				
+				if entity.Player then
+					if lplr:GetAttribute('Team') == entity.Player:GetAttribute('Team') then
+						continue
+					end
+				else
+					if not entity.Targetable then
+						continue
+					end
+				end
+				
+				local distance = (entity.RootPart.Position - myPos).Magnitude
+				if distance > AutoFireballRange.Value then continue end
+				
+				local toTarget = (entity.RootPart.Position - myPos).Unit
+				local dot = myLook:Dot(toTarget)
+				local angle = math.acos(dot)
+				local fovRad = math.rad(AutoFireballFOV.Value)
+				
+				if angle <= fovRad then
+					return true
+				end
+			end
+			
+			return false
+		end
+	end
+	
+	local AutoFireball = vape.Categories.Utility:CreateModule({
+		Name = 'AutoFireball',
+		Function = function(callback)
+			if callback then
+				autoFireballEnabled = true
+				
+				task.spawn(function()
+					repeat
+						task.wait(0.1)
+						if autoFireballEnabled and not _G.autoShootLock then
+							if not hasValidTarget() then
+								continue
+							end
+							
+							local currentTime = tick()
+							if (currentTime - lastAutoFireballTime) >= AutoFireballInterval.Value then
+								local fireballs = getFireballSlots()
+								local swordSlot = getSwordSlot()
+								
+								if #fireballs > 0 then
+									_G.autoShootLock = true
+									lastAutoFireballTime = currentTime
+									local originalSlot = store.inventory.hotbarSlot
+									
+									for _, fireballSlot in fireballs do
+										if hotbarSwitch(fireballSlot) then
+											task.wait(AutoFireballSwitchSpeed.Value)
+											leftClick()
+											task.wait(0.05)
+										end
+									end
+									
+									if swordSlot then
+										hotbarSwitch(swordSlot)
+									else
+										hotbarSwitch(originalSlot)
+									end
+									
+									_G.autoShootLock = false
+								end
+							end
+						end
+					until not autoFireballEnabled
+				end)
+			else
+				autoFireballEnabled = false
+			end
+		end,
+		Tooltip = 'Automatically throws fireballs at enemies'
+	})
+	
+	AutoFireballInterval = AutoFireball:CreateSlider({
+		Name = 'Throw Interval',
+		Min = 0.1,
+		Max = 3,
+		Default = 0.8,
+		Decimal = 10,
+		Suffix = function(val)
+			return val == 1 and 'second' or 'seconds'
+		end,
+		Tooltip = 'How often to throw fireballs'
+	})
+	
+	AutoFireballSwitchSpeed = AutoFireball:CreateSlider({
+		Name = 'Switch Delay',
+		Min = 0,
+		Max = 0.2,
+		Default = 0.05,
+		Decimal = 100,
+		Suffix = 's',
+		Tooltip = 'Delay between switching and throwing (lower = faster)'
+	})
+	
+	AutoFireballRange = AutoFireball:CreateSlider({
+		Name = 'Range',
+		Min = 1,
+		Max = 30,
+		Default = 15,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'Maximum range to throw fireballs'
+	})
+	
+	AutoFireballFOV = AutoFireball:CreateSlider({
+		Name = 'FOV',
+		Min = 1,
+		Max = 180,
+		Default = 90,
+		Tooltip = 'Field of view for target detection (1-180 degrees)'
+	})
+	
+	FireballKillauraTargetCheck = AutoFireball:CreateToggle({
+		Name = 'Require Killaura Target',
+		Default = false,
+		Tooltip = 'Only throw fireballs when Killaura has a target'
 	})
 end)
 
