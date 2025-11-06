@@ -11,6 +11,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -2353,6 +2354,7 @@ run(function()
 	local ContinueSwinging
 	local ContinueSwingTime
 	local lastTargetTime = 0
+	local continueSwingCount = 0
     local Particles, Boxes = {}, {}
     local anims, AnimDelay, AnimTween, armC0 = vape.Libraries.auraanims, tick()
     local AttackRemote
@@ -2536,11 +2538,18 @@ run(function()
 		
 		if #plrs > 0 then
 			lastTargetTime = tick()
+			continueSwingCount = 0
 			return false
 		end
 		
-		local timeSinceLastTarget = tick() - lastTargetTime
-		return timeSinceLastTarget <= ContinueSwingTime.Value
+		local swingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or 0.42
+		local maxSwings = math.floor(ContinueSwingTime.Value / swingSpeed)
+		
+		if continueSwingCount < maxSwings then
+			return true
+		end
+		
+		return false
 	end
 
     local preserveSwordIcon = false
@@ -2771,6 +2780,8 @@ run(function()
 								end
 							end
 						elseif shouldSwing then
+							continueSwingCount = continueSwingCount + 1
+							
 							Attacking = true
 							if not isClaw then
 								if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
@@ -2975,7 +2986,7 @@ run(function()
     })
 	ContinueSwinging = Killaura:CreateToggle({
 		Name = 'Continue Swinging',
-		Tooltip = 'Keep swinging after losing target',
+		Tooltip = 'Swing X times after losing target (based on swing speed)',
 		Function = function(callback)
 			if ContinueSwingTime then
 				ContinueSwingTime.Object.Visible = callback
