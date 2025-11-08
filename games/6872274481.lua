@@ -12,6 +12,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -1461,6 +1462,9 @@ run(function()
 	local AutoClicker
 	local CPS
 	local BlockCPS = {}
+	local SwordCPS = {}
+	local PlaceBlocksToggle
+	local SwingSwordToggle
 	local Thread
 	
 	local function AutoClick()
@@ -1471,20 +1475,32 @@ run(function()
 		Thread = task.delay(1 / 7, function()
 			repeat
 				if not bedwars.AppController:isLayerOpen(bedwars.UILayers.MAIN) then
-					local blockPlacer = bedwars.BlockPlacementController.blockPlacer
-					if store.hand.toolType == 'block' and blockPlacer then
-						if (workspace:GetServerTimeNow() - bedwars.BlockCpsController.lastPlaceTimestamp) >= ((1 / 12) * 0.5) then
-							local mouseinfo = blockPlacer.clientManager:getBlockSelector():getMouseInfo(0)
-							if mouseinfo and mouseinfo.placementPosition == mouseinfo.placementPosition then
-								task.spawn(blockPlacer.placeBlock, blockPlacer, mouseinfo.placementPosition)
+					if PlaceBlocksToggle.Enabled and store.hand.toolType == 'block' then
+						local blockPlacer = bedwars.BlockPlacementController.blockPlacer
+						if blockPlacer then
+							if (workspace:GetServerTimeNow() - bedwars.BlockCpsController.lastPlaceTimestamp) >= ((1 / 12) * 0.5) then
+								local mouseinfo = blockPlacer.clientManager:getBlockSelector():getMouseInfo(0)
+								if mouseinfo and mouseinfo.placementPosition == mouseinfo.placementPosition then
+									task.spawn(blockPlacer.placeBlock, blockPlacer, mouseinfo.placementPosition)
+								end
 							end
 						end
-					elseif store.hand.toolType == 'sword' then
+					
+					elseif SwingSwordToggle.Enabled and store.hand.toolType == 'sword' then
 						bedwars.SwordController:swingSwordAtMouse(0.39)
 					end
 				end
+				
+				local currentCPS
+				if store.hand.toolType == 'block' and PlaceBlocksToggle.Enabled then
+					currentCPS = BlockCPS
+				elseif store.hand.toolType == 'sword' and SwingSwordToggle.Enabled then
+					currentCPS = SwordCPS
+				else
+					currentCPS = CPS 
+				end
 	
-				task.wait(1 / (store.hand.toolType == 'block' and BlockCPS or CPS).GetRandomValue())
+				task.wait(1 / currentCPS.GetRandomValue())
 			until not AutoClicker.Enabled
 		end)
 	end
@@ -1526,14 +1542,8 @@ run(function()
 		end,
 		Tooltip = 'Hold attack button to automatically click'
 	})
-	CPS = AutoClicker:CreateTwoSlider({
-		Name = 'CPS',
-		Min = 1,
-		Max = 9,
-		DefaultMin = 7,
-		DefaultMax = 7
-	})
-	AutoClicker:CreateToggle({
+	
+	PlaceBlocksToggle = AutoClicker:CreateToggle({
 		Name = 'Place Blocks',
 		Default = true,
 		Function = function(callback)
@@ -1542,6 +1552,7 @@ run(function()
 			end
 		end
 	})
+	
 	BlockCPS = AutoClicker:CreateTwoSlider({
 		Name = 'Block CPS',
 		Min = 1,
@@ -1549,6 +1560,25 @@ run(function()
 		DefaultMin = 12,
 		DefaultMax = 12,
 		Darker = true
+	})
+
+	SwordCPS = AutoClicker:CreateTwoSlider({
+		Name = 'Sword CPS',
+		Min = 1,
+		Max = 9,
+		DefaultMin = 7,
+		DefaultMax = 7,
+		Darker = true
+	})
+
+	SwingSwordToggle = AutoClicker:CreateToggle({
+		Name = 'Swing Sword',
+		Default = true,
+		Function = function(callback)
+			if SwordCPS.Object then
+				SwordCPS.Object.Visible = callback
+			end
+		end
 	})
 end)
 	
@@ -2542,13 +2572,19 @@ run(function()
 			return false
 		end
 		
-		local swingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or 0.42
-		local maxSwings = math.floor(ContinueSwingTime.Value / swingSpeed)
+		if lastTargetTime == 0 then
+			return false
+		end
 		
-		if continueSwingCount < maxSwings then
+		local timeSinceLastTarget = tick() - lastTargetTime
+		local swingDuration = ContinueSwingTime.Value
+		
+		if timeSinceLastTarget <= swingDuration then
 			return true
 		end
 		
+		-- Reset if we've exceeded the duration
+		continueSwingCount = 0
 		return false
 	end
 
@@ -2558,13 +2594,14 @@ run(function()
     Killaura = vape.Categories.Blatant:CreateModule({
         Name = 'Killaura',
         Function = function(callback)
-            if callback then
-                lastSwingServerTime = Workspace:GetServerTimeNow()
-                lastSwingServerTimeDelta = 0
-                lastAttackTime = 0
-                swingCooldown = 0
+			if callback then
+				lastSwingServerTime = Workspace:GetServerTimeNow()
+				lastSwingServerTimeDelta = 0
+				lastAttackTime = 0
+				swingCooldown = 0
 				resetSwordCooldown() 
-				lastTargetTime = tick() 
+				lastTargetTime = 0 
+				continueSwingCount = 0
 
                 if RangeCircle.Enabled then
                     createRangeCircle()
@@ -2644,7 +2681,7 @@ run(function()
                     pcall(function() vapeTargetInfo.Targets.Killaura = nil end)
 
 					local shouldSwing = shouldContinueSwinging()
-					if sword and (canAttack or shouldSwing) then
+					if sword and (canAttack or (shouldSwing and lastTargetTime > 0)) then
 						if sigridcheck and entitylib.isAlive and lplr.Character:FindFirstChild("elk") then return end
 						local isClaw = string.find(string.lower(tostring(sword and sword.itemType or "")), "summoner_claw")
 						local plrs = entitylib.AllPosition({
@@ -2659,6 +2696,9 @@ run(function()
 						
 						if #plrs > 0 then
 							lastTargetTime = tick()
+							continueSwingCount = 0
+						elseif lastTargetTime == 0 then
+							lastTargetTime = 0
 						end
 						
 						switchItem(sword.tool, 0)
@@ -2780,8 +2820,7 @@ run(function()
 								end
 							end
 						elseif shouldSwing then
-							continueSwingCount = continueSwingCount + 1
-							
+
 							Attacking = true
 							if not isClaw then
 								if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
@@ -2803,37 +2842,40 @@ run(function()
 								end
 							end
 
-							if not SyncHits.Enabled or (tick() - swingCooldown) >= 0.1 then
+							local currentSwingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
+							local minSwingDelay = math.max(currentSwingSpeed, 0.05)
+							
+							if not SyncHits.Enabled or (tick() - swingCooldown) >= minSwingDelay then
 								swingCooldown = tick()
-							end
-							
-							local dir = entitylib.character.RootPart.CFrame.LookVector
-							local pos = entitylib.character.RootPart.Position
-							local targetPos = pos + dir * 10
+								
+								local dir = entitylib.character.RootPart.CFrame.LookVector
+								local pos = entitylib.character.RootPart.Position
+								local targetPos = pos + dir * 10
 
-							local attackData = {
-								weapon = sword.tool,
-								entityInstance = entitylib.character,
-								chargedAttack = {chargeRatio = 0},
-								validate = {
-									raycast = {
-										cameraPosition = {value = pos},
-										cursorDirection = {value = dir}
-									},
-									targetPosition = {value = targetPos},
-									selfPosition = {value = pos}
+								local attackData = {
+									weapon = sword.tool,
+									entityInstance = entitylib.character,
+									chargedAttack = {chargeRatio = 0},
+									validate = {
+										raycast = {
+											cameraPosition = {value = pos},
+											cursorDirection = {value = dir}
+										},
+										targetPosition = {value = targetPos},
+										selfPosition = {value = pos}
+									}
 								}
-							}
-							
-							attackData.validate = attackData.validate or {}
-							attackData.validate.raycast = attackData.validate.raycast or {}
-							attackData.validate.targetPosition = attackData.validate.targetPosition or {value = targetPos}
-							attackData.validate.selfPosition = attackData.validate.selfPosition or {value = pos}
-							
-							attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
-							attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
-							
-							FireAttackRemote(attackData)
+								
+								attackData.validate = attackData.validate or {}
+								attackData.validate.raycast = attackData.validate.raycast or {}
+								attackData.validate.targetPosition = attackData.validate.targetPosition or {value = targetPos}
+								attackData.validate.selfPosition = attackData.validate.selfPosition or {value = pos}
+								
+								attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
+								attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
+								
+								FireAttackRemote(attackData)
+							end
 						end
 					end
 
@@ -2860,28 +2902,31 @@ run(function()
 
                     task.wait(1 / UpdateRate.Value)
                 until not Killaura.Enabled
-            else
-                store.KillauraTarget = nil
-                for _, v in Boxes do
-                    v.Adornee = nil
-                end
-                for _, v in Particles do
-                    v.Parent = nil
-                end
-                if inputService.TouchEnabled then
-                    pcall(function()
-                        lplr.PlayerGui.MobileUI['2'].Visible = true
-                    end)
-                end
-                Attacking = false
-                if armC0 then
-                    AnimTween = tweenService:Create(gameCamera.Viewmodel.RightHand.RightWrist, TweenInfo.new(AnimationTween.Enabled and 0.001 or 0.3, Enum.EasingStyle.Exponential), {
-                        C0 = armC0
-                    })
-                    AnimTween:Play()
-                end
-                if RangeCirclePart ~= nil then RangeCirclePart:Destroy() end
-            end
+			else
+				lastTargetTime = 0
+				continueSwingCount = 0
+				
+				store.KillauraTarget = nil
+				for _, v in Boxes do
+					v.Adornee = nil
+				end
+				for _, v in Particles do
+					v.Parent = nil
+				end
+				if inputService.TouchEnabled then
+					pcall(function()
+						lplr.PlayerGui.MobileUI['2'].Visible = true
+					end)
+				end
+				Attacking = false
+				if armC0 then
+					AnimTween = tweenService:Create(gameCamera.Viewmodel.RightHand.RightWrist, TweenInfo.new(AnimationTween.Enabled and 0.001 or 0.3, Enum.EasingStyle.Exponential), {
+						C0 = armC0
+					})
+					AnimTween:Play()
+				end
+				if RangeCirclePart ~= nil then RangeCirclePart:Destroy() end
+			end
         end,
         Tooltip = 'Attack players around you\nwithout aiming at them.'
     })
@@ -2995,8 +3040,8 @@ run(function()
 	})
 	ContinueSwingTime = Killaura:CreateSlider({
 		Name = 'Swing Duration',
-		Min = 0.1,
-		Max = 3,
+		Min = 0,  
+		Max = 5,  
 		Default = 1,
 		Decimal = 10,
 		Suffix = 's',
@@ -7188,13 +7233,6 @@ run(function()
 		Name = 'Users',
 		Placeholder = 'player (userid)'
 	})
-	
-	task.spawn(function()
-		repeat task.wait(1) until vape.Loaded or vape.Loaded == nil
-		if vape.Loaded and not StaffDetector.Enabled then
-			StaffDetector:Toggle()
-		end
-	end)
 end)
 	
 run(function()
