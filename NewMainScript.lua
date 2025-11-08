@@ -1,12 +1,3 @@
-local blacklisted = {
-    9850122941 = true
-}
-
-if blacklisted[tostring(game.Players.LocalPlayer.UserId)] then
-    game:Shutdown()
-    return
-end
-
 local isfile = isfile or function(file)
 	local suc, res = pcall(function()
 		return readfile(file)
