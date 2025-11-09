@@ -13,6 +13,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -4286,8 +4287,8 @@ run(function()
 						local rawLook = CFrame.new(offsetpos, plr[TargetPart.Value].Position)
 						local distance = (plr[TargetPart.Value].Position - offsetpos).Magnitude
 						
-						local predictedPosition = prediction.predictStrafingMovement(plr.Player, plr[TargetPart.Value], projSpeed, gravity, offsetpos, distance)
-						
+						local predictedPosition = prediction.predictStrafingMovement(plr.Player, plr[TargetPart.Value], projSpeed, gravity, offsetpos)
+
 						local newlook = prediction.smoothAim(rawLook, predictedPosition, distance)
 						
 						if projmeta.projectile ~= 'owl_projectile' then
@@ -4309,10 +4310,7 @@ run(function()
 							playerGravity, 
 							plr.HipHeight, 
 							plr.Jumping and 50 or nil,
-							rayCheck,
-							distance,
-							plr.Jumping,
-							plr.RootPart.Velocity.Y
+							rayCheck
 						)
 						
 						if calc then
