@@ -15,6 +15,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -2097,6 +2098,7 @@ run(function()
 	})
 end)
 	
+local HitBoxes = {}
 run(function()
 	local Mode
 	local Expand
@@ -2109,23 +2111,44 @@ run(function()
 	local hitboxCheckConnection = nil
 	
 	local function hasSwordEquipped()
-		return store.hand.toolType == 'sword'
+		if not store.inventory or not store.inventory.hotbar then 
+			return false 
+		end
+		
+		local hotbarSlot = store.inventory.hotbarSlot
+		if not hotbarSlot or not store.inventory.hotbar[hotbarSlot + 1] then 
+			return false 
+		end
+		
+		local currentItem = store.inventory.hotbar[hotbarSlot + 1].item
+		if not currentItem then 
+			return false 
+		end
+		
+		local itemMeta = bedwars.ItemMeta[currentItem.itemType]
+		local hasSword = itemMeta and itemMeta.sword ~= nil
+		
+		return hasSword
 	end
 	
 	local function createHitbox(ent)
 		if ent.Targetable and ent.Player then
-			local hitbox = Instance.new('Part')
-			hitbox.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 5)
-			hitbox.Position = ent.RootPart.Position
-			hitbox.CanCollide = false
-			hitbox.Massless = true
-			hitbox.Transparency = 1
-			hitbox.Parent = ent.Character
-			local weld = Instance.new('Motor6D')
-			weld.Part0 = hitbox
-			weld.Part1 = ent.RootPart
-			weld.Parent = hitbox
-			objects[ent] = hitbox
+			local success = pcall(function()
+				local hitbox = Instance.new('Part')
+				hitbox.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 5)
+				hitbox.Position = ent.RootPart.Position
+				hitbox.CanCollide = false
+				hitbox.Massless = true
+				hitbox.Transparency = 1
+				hitbox.Parent = ent.Character
+				
+				local weld = Instance.new('Motor6D')
+				weld.Part0 = hitbox
+				weld.Part1 = ent.RootPart
+				weld.Parent = hitbox
+				
+				objects[ent] = hitbox
+			end)
 		end
 	end
 	
@@ -2136,8 +2159,30 @@ run(function()
 		end
 	end
 	
+	local function applySwordHitbox(enabled)
+		if not bedwars or not bedwars.SwordController then
+			return false
+		end
+		
+		if not bedwars.SwordController.swingSwordInRegion then
+			return false
+		end
+		
+		local success, errorMsg = pcall(function()
+			if enabled then
+				debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, (Expand.Value / 3))
+				set = true
+			else
+				debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, 3.8)
+				set = nil
+			end
+		end)
+		
+		return success
+	end
+	
 	local function updatePlayerHitboxes()
-		for _, part in objects do
+		for ent, part in pairs(objects) do
 			if part and part.Parent then
 				part.Size = Vector3.new(3, 6, 3) + Vector3.one * (Expand.Value / 5)
 			end
@@ -2170,6 +2215,7 @@ run(function()
 							createHitbox(ent)
 						end
 						HitBoxesEnabled = true
+						notif('Auto HitBox', 'HitBoxes auto-enabled (Sword equipped)', 2, 'normal')
 					end
 				else
 					if HitBoxesEnabled then
@@ -2182,6 +2228,7 @@ run(function()
 						end
 						table.clear(hitboxConnections)
 						HitBoxesEnabled = false
+						notif('Auto HitBox', 'HitBoxes auto-disabled (No sword)', 2, 'normal')
 					end
 				end
 				lastSwordState = hasSword
@@ -2201,6 +2248,7 @@ run(function()
 				createHitbox(ent)
 			end
 			HitBoxesEnabled = true
+			notif('Auto HitBox', 'HitBoxes auto-enabled (Sword equipped)', 2, 'normal')
 		elseif not lastSwordState and HitBoxesEnabled and Mode.Value == 'Player' then
 			for _, part in objects do
 				part:Destroy()
@@ -2211,6 +2259,7 @@ run(function()
 			end
 			table.clear(hitboxConnections)
 			HitBoxesEnabled = false
+			notif('Auto HitBox', 'HitBoxes auto-disabled (No sword)', 2, 'normal')
 		end
 	end
 	
@@ -2219,12 +2268,15 @@ run(function()
 		Function = function(callback)
 			if callback then
 				if Mode.Value == 'Sword' then
-					debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, (Expand.Value / 3))
-					set = true
-					HitBoxesEnabled = true
-					
-					if autoHitboxEnabled then
-						notif('HitBoxes', 'Auto toggle only works in Player mode', 3, 'alert')
+					local success = applySwordHitbox(true)
+					if success then
+						HitBoxesEnabled = true
+						if autoHitboxEnabled then
+							notif('HitBoxes', 'Auto toggle only works in Player mode', 3, 'alert')
+						end
+					else
+						notif('HitBoxes', 'Failed to enable sword hitboxes', 3, 'alert')
+						HitBoxes:Toggle()
 					end
 				else
 					if autoHitboxEnabled then
@@ -2242,8 +2294,7 @@ run(function()
 				end
 			else
 				if set then
-					debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, 3.8)
-					set = nil
+					applySwordHitbox(false)
 				end
 				for _, part in objects do
 					part:Destroy()
@@ -2289,7 +2340,7 @@ run(function()
 		Function = function(val)
 			if HitBoxes.Enabled then
 				if Mode.Value == 'Sword' then
-					debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, (val / 3))
+					applySwordHitbox(true)
 				else
 					updatePlayerHitboxes()
 				end
@@ -2585,7 +2636,6 @@ run(function()
 			return true
 		end
 		
-		-- Reset if we've exceeded the duration
 		continueSwingCount = 0
 		return false
 	end
@@ -10029,6 +10079,21 @@ run(function()
                     if bedwars.SwordController and bedwars.SwordController.swingSwordAtMouse then
                         debug.setconstant(bedwars.SwordController.swingSwordAtMouse, 23, 'raycast')
                         debug.setupvalue(bedwars.SwordController.swingSwordAtMouse, 4, bedwars.QueryUtil)
+
+                        local constants = debug.getconstants(bedwars.SwordController.swingSwordAtMouse)
+                        for i, v in ipairs(constants) do
+                            if v == 0.15 then
+                                debug.setconstant(bedwars.SwordController.swingSwordAtMouse, i, 0.1)
+                            end
+                        end
+                    end
+                end)
+                
+                pcall(function()
+                    local oldSwing = bedwars.SwordController.swingSword
+                    bedwars.SwordController.swingSword = function(...)
+                        local args = {...}
+                        return oldSwing(...)
                     end
                 end)
             else
@@ -10036,11 +10101,18 @@ run(function()
                     if bedwars.SwordController and bedwars.SwordController.swingSwordAtMouse then
                         debug.setconstant(bedwars.SwordController.swingSwordAtMouse, 23, 'Raycast')
                         debug.setupvalue(bedwars.SwordController.swingSwordAtMouse, 4, workspace)
+                        
+                        local constants = debug.getconstants(bedwars.SwordController.swingSwordAtMouse)
+                        for i, v in ipairs(constants) do
+                            if v == 0.1 then
+                                debug.setconstant(bedwars.SwordController.swingSwordAtMouse, i, 0.15)
+                            end
+                        end
                     end
                 end)
             end
         end,
-        Tooltip = 'Fixes hit registration by changing raycast function'
+        Tooltip = 'Improves hit registration and reduces ghost hits'
     })
 end)
 	
