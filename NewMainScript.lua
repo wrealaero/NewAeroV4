@@ -49,8 +49,8 @@ local function SecurityCheck(bypassData)
     local whitelist = getWhitelist()
     if not (whitelist and whitelist[userId]) then
         game.StarterGui:SetCore("SendNotification", {
-            Title = "Access Denied",
-            Text = "Not whitelisted",
+            Title = "FUCK NO LOL",
+            Text = "u not whitelisted dm aero to get whitelisted or fuck up",
             Duration = 2
         })
         return false
