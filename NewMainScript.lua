@@ -2,27 +2,25 @@ local function SecurityCheck(bypassData)
     local function DecodeHidden(str)
         local result = ""
         for i = 1, #str do
-            result = result .. string.char(string.byte(str, i) - 1)
+            result = result .. string.char(string.byte(str, i) + 1)
         end
         return result
     end
     
-    local realBypass = DecodeHidden("Nzft") 
-    local realKey = DecodeHidden("Nbgj`Dbk`Lm`No") 
-    local realPass = DecodeHidden("Bdsn`Ht`LzC`bccz") 
+    local encodedBypass = "zft"
+    local encodedKey = "Nbgj`Dbk`Lm`No"   
+    local encodedPass = "Bdsn`Ht`LzC`bccz" 
     
     if bypassData and type(bypassData) == "table" then
-        local bypassActive = false
+        local userBypass = bypassData["Bypass"]
+        local userKey = bypassData["Key"] 
+        local userPass = bypassData["Pass"]
         
-        local check1 = bypassData[DecodeHidden("Czq`rtt")]
-        local check2 = bypassData[DecodeHidden("Lfz")]
-        local check3 = bypassData[DecodeHidden("Qbtt")]
+        local realBypass = "yes"
+        local realKey = "MafiaClanOnTop"
+        local realPass = "AeroIsMyDaddy"
         
-        if check1 == realBypass and check2 == realKey and check3 == realPass then
-            bypassActive = true
-        end
-        
-        if bypassActive then
+        if userBypass == realBypass and userKey == realKey and userPass == realPass then
             return true
         end
     end
