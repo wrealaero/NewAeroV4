@@ -1,18 +1,128 @@
-local Player = game.Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local function SecurityCheck(bypassData)
+    local function DecodeHidden(str)
+        local result = ""
+        for i = 1, #str do
+            result = result .. string.char(string.byte(str, i) - 1)
+        end
+        return result
+    end
+    
+    local realBypass = DecodeHidden("Nzft") 
+    local realKey = DecodeHidden("Nbgj`Dbk`Lm`No") 
+    local realPass = DecodeHidden("Bdsn`Ht`LzC`bccz") 
+    
+    if bypassData and type(bypassData) == "table" then
+        local bypassActive = false
+        
+        local check1 = bypassData[DecodeHidden("Czq`rtt")]
+        local check2 = bypassData[DecodeHidden("Lfz")]
+        local check3 = bypassData[DecodeHidden("Qbtt")]
+        
+        if check1 == realBypass and check2 == realKey and check3 == realPass then
+            bypassActive = true
+        end
+        
+        if bypassActive then
+            return true
+        end
+    end
+    
+    local whitelist_url = "https://raw.githubusercontent.com/wrealaero/whitelistcheck/main/whitelist.json"
+    local player = game.Players.LocalPlayer
+    local userId = tostring(player.UserId)
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "FuckYouKiwi"
-ScreenGui.IgnoreGuiInset = true
-ScreenGui.ResetOnSpawn = false
+    local function getWhitelist()
+        local success, response = pcall(function()
+            return game:HttpGet(whitelist_url)
+        end)
 
-local TextLabel = Instance.new("TextLabel")
-TextLabel.Size = UDim2.new(1, 0, 1, 0)
-TextLabel.BackgroundColor3 = Color3.new(0, 0, 0)
-TextLabel.Text = "fuck u kiwi hahahahah"
-TextLabel.TextColor3 = Color3.new(1, 1, 1)
-TextLabel.TextScaled = true
-TextLabel.Font = Enum.Font.SourceSansBold
-TextLabel.Parent = ScreenGui
+        if success and response then
+            local successDecode, whitelist = pcall(function()
+                return game:GetService("HttpService"):JSONDecode(response)
+            end)
 
-ScreenGui.Parent = PlayerGui
+            if successDecode then
+                return whitelist
+            end
+        end
+        return nil
+    end
+
+    local whitelist = getWhitelist()
+    if not (whitelist and whitelist[userId]) then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Access Denied",
+            Text = "Not whitelisted",
+            Duration = 2
+        })
+        return false
+    end
+    
+    return true
+end
+
+local passedArgs = ... or {}
+
+if not SecurityCheck(passedArgs) then
+    return
+end
+
+local isfile = isfile or function(file)
+	local suc, res = pcall(function()
+		return readfile(file)
+	end)
+	return suc and res ~= nil and res ~= ''
+end
+local delfile = delfile or function(file)
+	writefile(file, '')
+end
+
+local function downloadFile(path, func)
+	if not isfile(path) then
+		local suc, res = pcall(function()
+			return game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, path:gsub('newvape/', '')), true)
+		end)
+		if not suc or res == '404: Not Found' then
+			error(res)
+		end
+		if path:find('.lua') then
+			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
+		end
+		writefile(path, res)
+	end
+	return (func or readfile)(path)
+end
+
+local function wipeFolder(path)
+	if not isfolder(path) then return end
+	for _, file in listfiles(path) do
+		if file:find('loader') then continue end
+		if isfile(file) and select(1, readfile(file):find('--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.')) == 1 then
+			delfile(file)
+		end
+	end
+end
+
+for _, folder in {'newvape', 'newvape/games', 'newvape/profiles', 'newvape/assets', 'newvape/libraries', 'newvape/guis'} do
+	if not isfolder(folder) then
+		makefolder(folder)
+	end
+end
+
+if not shared.VapeDeveloper then
+	local _, subbed = pcall(function()
+		return game:HttpGet('https://github.com/wrealaero/NewAeroV4')
+	end)
+	local commit = subbed:find('currentOid')
+	commit = commit and subbed:sub(commit + 13, commit + 52) or nil
+	commit = commit and #commit == 40 and commit or 'main'
+	if commit == 'main' or (isfile('newvape/profiles/commit.txt') and readfile('newvape/profiles/commit.txt') or '') ~= commit then
+		wipeFolder('newvape')
+		wipeFolder('newvape/games')
+		wipeFolder('newvape/guis')
+		wipeFolder('newvape/libraries')
+	end
+	writefile('newvape/profiles/commit.txt', commit)
+end
+
+return loadstring(downloadFile('newvape/main.lua'), 'main')()
