@@ -4,18 +4,6 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -2407,7 +2395,7 @@ run(function()
     local RangeCircle
     local RangeCirclePart
     local UpdateRate
-    local AngleSlider
+    local AttackAngleSlider
     local MaxTargets
     local Mouse
     local Swing
@@ -2736,7 +2724,8 @@ run(function()
 					if sword and (canAttack or (shouldSwing and lastTargetTime > 0)) then
 						if sigridcheck and entitylib.isAlive and lplr.Character:FindFirstChild("elk") then return end
 						local isClaw = string.find(string.lower(tostring(sword and sword.itemType or "")), "summoner_claw")
-						local plrs = entitylib.AllPosition({
+						
+						local swingPlrs = entitylib.AllPosition({
 							Range = SwingRange.Value,
 							Wallcheck = Targets.Walls.Enabled or nil,
 							Part = 'RootPart',
@@ -2746,7 +2735,17 @@ run(function()
 							Sort = sortmethods[Sort.Value]
 						})
 						
-						if #plrs > 0 then
+						local attackPlrs = entitylib.AllPosition({
+							Range = AttackRange.Value,
+							Wallcheck = Targets.Walls.Enabled or nil,
+							Part = 'RootPart',
+							Players = Targets.Players.Enabled,
+							NPCs = Targets.NPCs.Enabled,
+							Limit = MaxTargets.Value,
+							Sort = sortmethods[Sort.Value]
+						})
+						
+						if #attackPlrs > 0 then
 							lastTargetTime = tick()
 							continueSwingCount = 0
 						elseif lastTargetTime == 0 then
@@ -2757,28 +2756,19 @@ run(function()
 						local selfpos = entitylib.character.RootPart.Position
 						local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
 
-						if #plrs > 0 then
-							for _, v in plrs do
+						if #swingPlrs > 0 then
+							for _, v in swingPlrs do
 								local delta = (v.RootPart.Position - selfpos)
-								local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
-								local swingAngle = SwingAngleSlider and math.rad(SwingAngleSlider.Value) or math.rad(AngleSlider.Value)
-								if angle > (swingAngle / 2) then continue end
+								local swingAngle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
+								local maxSwingAngle = SwingAngleSlider and math.rad(SwingAngleSlider.Value) or math.rad(360)
+								
+								if swingAngle > (maxSwingAngle / 2) then continue end
 
 								table.insert(attacked, {
 									Entity = v,
 									Check = delta.Magnitude > AttackRange.Value and BoxSwingColor or BoxAttackColor
 								})
-								targetinfo.Targets[v] = tick() + 1
-								pcall(function()
-									local plr = v
-									vapeTargetInfo.Targets.Killaura = {
-										Humanoid = {
-											Health = (plr.Character:GetAttribute("Health") or plr.Humanoid.Health) + getShieldAttribute(plr.Character),
-											MaxHealth = plr.Character:GetAttribute("MaxHealth") or plr.Humanoid.MaxHealth
-										},
-										Player = plr.Player
-									}
-								end)
+								
 								if not Attacking then
 									Attacking = true
 									store.KillauraTarget = v
@@ -2802,6 +2792,28 @@ run(function()
 										end
 									end
 								end
+							end
+						end
+
+						if #attackPlrs > 0 then
+							for _, v in attackPlrs do
+								local delta = (v.RootPart.Position - selfpos)
+								local attackAngle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
+								local maxAttackAngle = AttackAngleSlider and math.rad(AttackAngleSlider.Value) or math.rad(360)
+								
+								if attackAngle > (maxAttackAngle / 2) then continue end
+
+								targetinfo.Targets[v] = tick() + 1
+								pcall(function()
+									local plr = v
+									vapeTargetInfo.Targets.Killaura = {
+										Humanoid = {
+											Health = (plr.Character:GetAttribute("Health") or plr.Humanoid.Health) + getShieldAttribute(plr.Character),
+											MaxHealth = plr.Character:GetAttribute("MaxHealth") or plr.Humanoid.MaxHealth
+										},
+										Player = plr.Player
+									}
+								end)
 
 								local canHit = delta.Magnitude <= AttackRange.Value
 								local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 5) 
@@ -2872,7 +2884,6 @@ run(function()
 								end
 							end
 						elseif shouldSwing then
-
 							Attacking = true
 							if not isClaw then
 								if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
@@ -3035,8 +3046,8 @@ run(function()
             end
         end
     })
-    AngleSlider = Killaura:CreateSlider({
-        Name = 'Max angle',
+    AttackAngleSlider = Killaura:CreateSlider({
+        Name = 'Attack angle',
         Min = 1,
         Max = 360,
         Default = 360
