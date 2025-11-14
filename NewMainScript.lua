@@ -17,8 +17,8 @@ local function SecurityCheck(bypassData)
         local userPass = bypassData["Pass"]
         
         local realBypass = "yes"
-        local realKey = "MafiaClanOnTop"
-        local realPass = "AeroIsMyDaddy"
+        local realKey = "FUCKDESIRE"
+        local realPass = "FUCK MAFIA"
         
         if userBypass == realBypass and userKey == realKey and userPass == realPass then
             return true
