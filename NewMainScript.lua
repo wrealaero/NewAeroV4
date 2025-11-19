@@ -24,28 +24,29 @@ local function SecurityCheck(loginData)
         end)
 
         if success and response then
-            local successDecode, accounts = pcall(function()
-                return loadstring(response)()
-            end)
-
-            if successDecode then
-                return accounts
+            local accountsTable = loadstring(response)()
+            if accountsTable and accountsTable.Accounts then
+                return accountsTable.Accounts
             end
         end
         return nil
     end
 
     local accounts = getAccounts()
-    if not (accounts and accounts[userId]) then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "FUCK NO LOL",
-            Text = "u not whitelisted dm aero to get whitelisted or fuck up",
-            Duration = 2
-        })
-        return false
+    if accounts then
+        for _, account in pairs(accounts) do
+            if account.Username == loginData.Username and account.Password == loginData.Password then
+                return true
+            end
+        end
     end
     
-    return true
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "FUCK NO LOL",
+        Text = "u not whitelisted dm aero to get whitelisted or fuck up",
+        Duration = 2
+    })
+    return false
 end
 
 local passedArgs = ... or {}
