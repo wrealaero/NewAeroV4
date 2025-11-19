@@ -98,16 +98,16 @@ shared.vape = vape
 if not shared.VapeIndependent then
 	loadstring(downloadFile('newvape/games/universal.lua'), 'universal')()
 	
-	local scriptName = "mobiletest1"
-	if isfile('newvape/games/'..scriptName..'.lua') then
-		loadstring(readfile('newvape/games/'..scriptName..'.lua'), scriptName)(...)
+	local scriptName = "mobiletest1.lua"
+	if isfile('newvape/games/'..scriptName) then
+		loadstring(readfile('newvape/games/'..scriptName), scriptName)()
 	else
 		if not shared.VapeDeveloper then
 			local suc, res = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/games/'..scriptName..'.lua', true)
+				return game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/games/'..scriptName, true)
 			end)
 			if suc and res ~= '404: Not Found' then
-				loadstring(downloadFile('newvape/games/'..scriptName..'.lua'), scriptName)(...)
+				loadstring(downloadFile('newvape/games/'..scriptName), scriptName)()
 			end
 		end
 	end
