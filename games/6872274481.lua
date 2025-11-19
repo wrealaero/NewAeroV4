@@ -1,4 +1,5 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -5388,36 +5389,34 @@ end)
 
 run(function()
 	local AutoFireInterval
-	local lastAutoFireTime = 0
 	local autoFireEnabled = false
-	local autoFireThread = nil
-	local FirstPersonCheck
+	local lastAutoFireTime = 0
+	local wasHoldingBow = false
 	
 	local VirtualInputManager = game:GetService("VirtualInputManager")
 	
 	local function leftClick()
 		pcall(function()
 			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-			task.wait(0.01)
+			task.wait(0.05)
 			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
 		end)
 	end
 	
-	local function isHoldingShootableWeapon()
-		if not store.hand or not store.hand.tool then return false end
+	local function isHoldingBow()
+		if not entitylib.isAlive then return false end
 		
-		local itemMeta = bedwars.ItemMeta[store.hand.tool.Name]
-		if not itemMeta then return false end
+		local currentSlot = store.inventory.hotbarSlot
+		local slotItem = store.inventory.hotbar[currentSlot + 1]
 		
-		if itemMeta.projectileSource then
-			local projectileSource = itemMeta.projectileSource
-			if projectileSource.ammoItemTypes and (table.find(projectileSource.ammoItemTypes, 'arrow') or #projectileSource.ammoItemTypes > 0) then
-				return true
+		if slotItem and slotItem.item and slotItem.item.itemType then
+			local itemMeta = bedwars.ItemMeta[slotItem.item.itemType]
+			if itemMeta and itemMeta.projectileSource then
+				local projectileSource = itemMeta.projectileSource
+				if projectileSource.ammoItemTypes and table.find(projectileSource.ammoItemTypes, 'arrow') then
+					return true
+				end
 			end
-		end
-		
-		if store.hand.toolType == 'bow' then
-			return true
 		end
 		
 		return false
@@ -5428,63 +5427,48 @@ run(function()
 		Function = function(callback)
 			if callback then
 				autoFireEnabled = true
+				wasHoldingBow = false
 				
-				if autoFireThread then
-					coroutine.close(autoFireThread)
-				end
-				
-				autoFireThread = task.spawn(function()
-					while autoFireEnabled and entitylib.isAlive do
-						if FirstPersonCheck.Enabled and not isFirstPerson() then
-							task.wait(0.1)
-							continue
-						end
-						
-						local currentTime = tick()
-						local interval = math.max(AutoFireInterval.Value, 0.1) 
-						
-						if (currentTime - lastAutoFireTime) >= interval then
-							if isHoldingShootableWeapon() then
+				task.spawn(function()
+					repeat
+						task.wait(0.05)
+						if autoFireEnabled and entitylib.isAlive then
+							local holdingBow = isHoldingBow()
+							
+							if holdingBow and not wasHoldingBow then
 								leftClick()
-								lastAutoFireTime = currentTime
+								lastAutoFireTime = tick()
+								wasHoldingBow = true
+							elseif holdingBow then
+								local currentTime = tick()
+								if (currentTime - lastAutoFireTime) >= AutoFireInterval.Value then
+									lastAutoFireTime = currentTime
+									leftClick()
+								end
+							else
+								wasHoldingBow = false
 							end
 						end
-						
-						local waitTime = math.min(0.05, interval / 2)
-						for i = 1, math.ceil(waitTime / 0.01) do
-							if not autoFireEnabled then break end
-							task.wait(0.01)
-						end
-					end
-					autoFireThread = nil
+					until not autoFireEnabled
 				end)
 			else
 				autoFireEnabled = false
-				if autoFireThread then
-					coroutine.close(autoFireThread)
-					autoFireThread = nil
-				end
+				wasHoldingBow = false
 			end
 		end,
-		Tooltip = 'Automatically shoots when holding bows/projectile weapons'
+		Tooltip = 'Automatically clicks when holding a bow/crossbow/headhunter - shoots instantly on pull out'
 	})
 	
 	AutoFireInterval = AutoFire:CreateSlider({
 		Name = 'Fire Rate',
 		Min = 0.1,
 		Max = 3,
-		Default = 0.5,
+		Default = 1.2,
 		Decimal = 10,
 		Suffix = function(val)
 			return val == 1 and 'second' or 'seconds'
 		end,
-		Tooltip = 'How often to auto-fire'
-	})
-	
-	FirstPersonCheck = AutoFire:CreateToggle({
-		Name = 'First Person Only',
-		Default = false,
-		Tooltip = 'Only works in first person mode'
+		Tooltip = 'desire lazy ass needed this LOL'
 	})
 end)
 
@@ -8598,6 +8582,25 @@ run(function()
         return hasSupport or checkAdjacent(blockpos)
     end
     
+    local function isCornerPosition(playerPos, blockPos)
+        local root = entitylib.character.RootPart
+        local lookVector = root.CFrame.LookVector
+        local rightVector = root.CFrame.RightVector
+        
+        local offset = blockPos - playerPos
+        local flatOffset = Vector3.new(offset.X, 0, offset.Z)
+        
+        if flatOffset.Magnitude < 0.1 then
+            return false
+        end
+        
+        local normalizedOffset = flatOffset.Unit
+        local forwardDot = math.abs(lookVector:Dot(normalizedOffset))
+        local rightDot = math.abs(rightVector:Dot(normalizedOffset))
+        
+        return forwardDot > 0.3 and rightDot > 0.3
+    end
+    
     AutoBuildUp = vape.Categories.World:CreateModule({
         Name = 'AutoBuildUp',
         Function = function(callback)
@@ -8616,14 +8619,16 @@ run(function()
                                 if not block then
                                     blockpos = blockpos * 3
                                     
-                                    if checkAdjacent(blockpos) then
-                                        if canPlaceAtPosition(blockpos) then
-                                            task.spawn(bedwars.placeBlock, blockpos, wool, false)
-                                        end
-                                    else
-                                        local nearestBlock = blockProximity(currentpos)
-                                        if nearestBlock and canPlaceAtPosition(nearestBlock) then
-                                            task.spawn(bedwars.placeBlock, nearestBlock, wool, false)
+                                    if not isCornerPosition(root.Position, blockpos) then
+                                        if checkAdjacent(blockpos) then
+                                            if canPlaceAtPosition(blockpos) then
+                                                task.spawn(bedwars.placeBlock, blockpos, wool, false)
+                                            end
+                                        else
+                                            local nearestBlock = blockProximity(currentpos)
+                                            if nearestBlock and not isCornerPosition(root.Position, nearestBlock) and canPlaceAtPosition(nearestBlock) then
+                                                task.spawn(bedwars.placeBlock, nearestBlock, wool, false)
+                                            end
                                         end
                                     end
                                 end
@@ -8635,7 +8640,7 @@ run(function()
                 until not AutoBuildUp.Enabled
             end
         end,
-        Tooltip = 'Automatically places blocks under you ONLY when jumping'
+        Tooltip = 'Automatically places blocks under you ONLY when jumping (no corners)'
     })
     
     LimitItem = AutoBuildUp:CreateToggle({
