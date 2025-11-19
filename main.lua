@@ -97,19 +97,15 @@ shared.vape = vape
 
 if not shared.VapeIndependent then
 	loadstring(downloadFile('newvape/games/universal.lua'), 'universal')()
-	if game.PlaceId == 6872274481 then
-		loadstring(downloadFile('newvape/games/aerov4shi.lua'), 'aerov4shi')()
+	if isfile('newvape/games/'..game.PlaceId..'.lua') then
+		loadstring(readfile('newvape/games/'..game.PlaceId..'.lua'), tostring(game.PlaceId))(...)
 	else
-		if isfile('newvape/games/'..game.PlaceId..'.lua') then
-			loadstring(readfile('newvape/games/'..game.PlaceId..'.lua'), tostring(game.PlaceId))(...)
-		else
-			if not shared.VapeDeveloper then
-				local suc, res = pcall(function()
-					return game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/games/'..game.PlaceId..'.lua', true)
-				end)
-				if suc and res ~= '404: Not Found' then
-					loadstring(downloadFile('newvape/games/'..game.PlaceId..'.lua'), tostring(game.PlaceId))(...)
-				end
+		if not shared.VapeDeveloper then
+			local suc, res = pcall(function()
+				return game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/games/'..game.PlaceId..'.lua', true)
+			end)
+			if suc and res ~= '404: Not Found' then
+				loadstring(downloadFile('newvape/games/'..game.PlaceId..'.lua'), tostring(game.PlaceId))(...)
 			end
 		end
 	end
