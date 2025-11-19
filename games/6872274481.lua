@@ -1628,7 +1628,8 @@ run(function()
 end)
 
 run(function()
-    local KitRender = vape.Categories.Render:CreateModule({
+    local KitRender
+    KitRender = vape.Categories.Render:CreateModule({
         Name = 'Kit Render',
         Function = function(callback)
             if callback then
@@ -1751,124 +1752,204 @@ run(function()
                     ["wind_walker"] = "rbxassetid://9872355499"
                 }
 
-                local function createkitrender(plr)
-                    local icon = Instance.new("ImageLabel")
-                    icon.Name = "ReVapeKitRender"
-                    icon.AnchorPoint = Vector2.new(1, 0.5)
-                    icon.BackgroundTransparency = 1
-                    icon.Position = UDim2.new(1.05, 0, 0.5, 0)
-                    icon.Size = UDim2.new(1.5, 0, 1.5, 0)
-                    icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
-                    icon.ImageTransparency = 0.4
-                    icon.ScaleType = Enum.ScaleType.Crop
-                    local uar = Instance.new("UIAspectRatioConstraint")
-                    uar.AspectRatio = 1
-                    uar.AspectType = Enum.AspectType.FitWithinMaxSize
-                    uar.DominantAxis = Enum.DominantAxis.Width
-                    uar.Parent = icon
-                    icon.Image = ids[plr:GetAttribute("PlayingAsKit")] or ids["none"]
-                    return icon
-                end
+                KitRender.Connections = {}
+                KitRender.RunningLoops = {}
+                KitRender.IsEnabled = true
 
-                local function removeallkitrenders()
-                    for _, v in ipairs(PlayerGui:GetDescendants()) do
-                        if v:IsA("ImageLabel") and v.Name == "ReVapeKitRender" then
-                            v:Destroy()
-                        end
-                    end
+                local function createkitrender(plr)
+                    if not plr then return nil end
+                    local success, icon = pcall(function()
+                        local icon = Instance.new("ImageLabel")
+                        icon.Name = "ReVapeKitRender"
+                        icon.AnchorPoint = Vector2.new(1, 0.5)
+                        icon.BackgroundTransparency = 1
+                        icon.Position = UDim2.new(1.05, 0, 0.5, 0)
+                        icon.Size = UDim2.new(1.5, 0, 1.5, 0)
+                        icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+                        icon.ImageTransparency = 0.4
+                        icon.ScaleType = Enum.ScaleType.Crop
+                        local uar = Instance.new("UIAspectRatioConstraint")
+                        uar.AspectRatio = 1
+                        uar.AspectType = Enum.AspectType.FitWithinMaxSize
+                        uar.DominantAxis = Enum.DominantAxis.Width
+                        uar.Parent = icon
+                        local kitName = plr:GetAttribute("PlayingAsKit")
+                        icon.Image = ids[kitName] or ids["none"]
+                        return icon
+                    end)
+                    return success and icon or nil
                 end
 
                 local function refreshicon(icon, plr)
-                    icon.Image = ids[plr:GetAttribute("PlayingAsKit")] or ids["none"]
+                    if not icon or not icon.Parent or not plr then return end
+                    pcall(function()
+                        local kitName = plr:GetAttribute("PlayingAsKit")
+                        icon.Image = ids[kitName] or ids["none"]
+                    end)
                 end
 
                 local function findPlayer(label, container)
-                    local render = container:FindFirstChild("PlayerRender", true)
-                    if render and render:IsA("ImageLabel") and render.Image then
+                    if not label or not container then return nil end
+                    
+                    local success, render = pcall(function()
+                        return container:FindFirstChild("PlayerRender", true)
+                    end)
+                    
+                    if success and render and render:IsA("ImageLabel") and render.Image then
                         local userId = string.match(render.Image, "id=(%d+)")
                         if userId then
                             local plr = Players:GetPlayerByUserId(tonumber(userId))
                             if plr then return plr end
                         end
                     end
+                    
                     local text = label.Text
                     for _, plr in ipairs(Players:GetPlayers()) do
-                        if plr.Name == text or plr.DisplayName == text or plr:GetAttribute("DisguiseDisplayName") == text then
+                        if plr.Name == text or plr.DisplayName == text then
+                            return plr
+                        end
+                        local disguise = plr:GetAttribute("DisguiseDisplayName")
+                        if disguise and disguise == text then
                             return plr
                         end
                     end
+                    
+                    return nil
                 end
 
                 local function handleLabel(label)
-                    if not (label:IsA("TextLabel") and label.Name == "PlayerName") then return end
+                    if not label or not label:IsA("TextLabel") or label.Name ~= "PlayerName" then return end
+                    if not KitRender.IsEnabled then return end
+                    
                     task.spawn(function()
-                        local container = label.Parent
-                        for _ = 1, 3 do
-                            if container and container.Parent then
-                                container = container.Parent
-                            end
-                        end
-                        if not container or not container:IsA("Frame") then return end
-                        local playerFound = findPlayer(label, container)
-                        if not playerFound then
-                            task.wait(0.5)
-                            playerFound = findPlayer(label, container)
-                        end
-                        if not playerFound then return end
-                        container.Name = playerFound.Name
-                        local card = container:FindFirstChild("1") and container["1"]:FindFirstChild("MatchDraftPlayerCard")
-                        if not card then return end
-                        local icon = card:FindFirstChild("ReVapeKitRender")
-                        if not icon then
-                            icon = createkitrender(playerFound)
-                            icon.Parent = card
-                        end
-                        task.spawn(function()
-                            while container and container.Parent and KitRender.Enabled do
-                                local updatedPlayer = findPlayer(label, container)
-                                if updatedPlayer and updatedPlayer ~= playerFound then
-                                    playerFound = updatedPlayer
+                        local success, err = pcall(function()
+                            local container = label.Parent
+                            for _ = 1, 3 do
+                                if container and container.Parent then
+                                    container = container.Parent
                                 end
-                                if playerFound and icon then
-                                    refreshicon(icon, playerFound)
-                                end
-                                task.wait(1)
                             end
+                            
+                            if not container or not container:IsA("Frame") then return end
+                            
+                            local playerFound = findPlayer(label, container)
+                            if not playerFound then
+                                task.wait(0.5)
+                                playerFound = findPlayer(label, container)
+                            end
+                            
+                            if not playerFound then return end
+                            
+                            container.Name = playerFound.Name
+                            
+                            local card = container:FindFirstChild("1")
+                            if card then
+                                card = card:FindFirstChild("MatchDraftPlayerCard")
+                            end
+                            
+                            if not card then return end
+                            
+                            local icon = card:FindFirstChild("ReVapeKitRender")
+                            if not icon then
+                                icon = createkitrender(playerFound)
+                                if icon then
+                                    icon.Parent = card
+                                end
+                            end
+                            
+                            if not icon then return end
+                            
+                            local loopKey = tostring(container)..tostring(playerFound.UserId)
+                            KitRender.RunningLoops[loopKey] = task.spawn(function()
+                                while container and container.Parent and icon and icon.Parent and KitRender.IsEnabled do
+                                    local updatedPlayer = findPlayer(label, container)
+                                    if updatedPlayer and updatedPlayer ~= playerFound then
+                                        playerFound = updatedPlayer
+                                    end
+                                    if playerFound then
+                                        refreshicon(icon, playerFound)
+                                    end
+                                    task.wait(1)
+                                end
+                                if KitRender.RunningLoops then
+                                    KitRender.RunningLoops[loopKey] = nil
+                                end
+                            end)
                         end)
+                        
+                        if not success then
+                            warn("KitRender handleLabel error:", err)
+                        end
                     end)
                 end
 
                 task.spawn(function()
-                    local team2 = PlayerGui:WaitForChild("MatchDraftApp")
-                        :WaitForChild("DraftAppBackground")
-                        :WaitForChild("BodyContainer")
-                        :WaitForChild("Team2Column")
+                    local success, team2 = pcall(function()
+                        local app = PlayerGui:WaitForChild("MatchDraftApp", 10)
+                        if not app then return nil end
+                        local bg = app:WaitForChild("DraftAppBackground", 5)
+                        if not bg then return nil end
+                        local body = bg:WaitForChild("BodyContainer", 5)
+                        if not body then return nil end
+                        return body:WaitForChild("Team2Column", 5)
+                    end)
+                    
+                    if not success or not team2 then return end
 
                     for _, child in ipairs(team2:GetDescendants()) do
-                        handleLabel(child)
+                        if KitRender.IsEnabled then
+                            handleLabel(child)
+                        end
                     end
 
-                    team2.DescendantAdded:Connect(function(child)
-                        handleLabel(child)
+                    local conn = team2.DescendantAdded:Connect(function(child)
+                        if KitRender.IsEnabled then
+                            handleLabel(child)
+                        end
                     end)
+                    
+                    if KitRender.Connections then
+                        table.insert(KitRender.Connections, conn)
+                    end
                 end)
-
-                KitRender.Connections = {}
             else
+                if KitRender then
+                    KitRender.IsEnabled = false
+                end
+                
                 if KitRender.Connections then
                     for _, connection in pairs(KitRender.Connections) do
-                        connection:Disconnect()
+                        pcall(function()
+                            if connection and typeof(connection) == "RBXScriptConnection" then
+                                connection:Disconnect()
+                            end
+                        end)
                     end
+                    table.clear(KitRender.Connections)
                     KitRender.Connections = nil
                 end
                 
-                local Players = game:GetService("Players")
-                local player = Players.LocalPlayer
-                local PlayerGui = player:WaitForChild("PlayerGui")
+                if KitRender.RunningLoops then
+                    for _, loopTask in pairs(KitRender.RunningLoops) do
+                        pcall(function()
+                            if loopTask and typeof(loopTask) == "thread" then
+                                task.cancel(loopTask)
+                            end
+                        end)
+                    end
+                    table.clear(KitRender.RunningLoops)
+                    KitRender.RunningLoops = nil
+                end
                 
-                for _, v in ipairs(PlayerGui:GetDescendants()) do
-                    if v:IsA("ImageLabel") and v.Name == "ReVapeKitRender" then
-                        v:Destroy()
+                local success, PlayerGui = pcall(function()
+                    return Players.LocalPlayer:FindFirstChild("PlayerGui")
+                end)
+                
+                if success and PlayerGui then
+                    for _, v in ipairs(PlayerGui:GetDescendants()) do
+                        if v:IsA("ImageLabel") and v.Name == "ReVapeKitRender" then
+                            pcall(function() v:Destroy() end)
+                        end
                     end
                 end
             end
