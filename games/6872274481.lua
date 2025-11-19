@@ -2716,6 +2716,7 @@ run(function()
     local AnimationTween
     local Limit
 	local SwingAngleSlider
+    local LegitAura
     local SyncHits
     local lastAttackTime = 0
     local lastManualSwing = 0
@@ -2865,6 +2866,15 @@ run(function()
         local meta = bedwars.ItemMeta[sword.tool.Name]
         if Limit.Enabled then
             if store.hand.toolType ~= 'sword' or bedwars.DaoController.chargingMaid then return false end
+        end
+
+        if LegitAura.Enabled then
+            local isSwinging = inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+            local timeSinceLastSwing = workspace:GetServerTimeNow() - bedwars.SwordController.lastAttack
+            local recentlySwung = timeSinceLastSwing < 0.3
+            if not isSwinging and not recentlySwung then
+                return false
+            end
         end
 
         if SwingTime.Enabled then
@@ -3064,7 +3074,7 @@ run(function()
 									Attacking = true
 									store.KillauraTarget = v
 									if not isClaw then
-										if not Swing.Enabled and AnimDelay <= tick() then
+										if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
 											local swingSpeed = 0.25
 											if SwingTime.Enabled then
 												swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
@@ -3156,7 +3166,7 @@ run(function()
 
 							Attacking = true
 							if not isClaw then
-								if not Swing.Enabled and AnimDelay <= tick() then
+								if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
 									local swingSpeed = 0.25
 									if SwingTime.Enabled then
 										swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
@@ -3566,6 +3576,10 @@ run(function()
             end
         end,
         Tooltip = 'Only attacks when the sword is held'
+    })
+    LegitAura = Killaura:CreateToggle({
+        Name = 'Swing only',
+        Tooltip = 'Only attacks while swinging manually'
     })
     Killaura:CreateToggle({
         Name = "Sigrid Check",
