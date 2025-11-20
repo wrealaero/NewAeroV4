@@ -1,5 +1,4 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -1261,7 +1260,7 @@ run(function()
 						end
 						
 						local useProjectileMode = ProjectileMode.Enabled and isHoldingProjectile()
-						local effectiveDistance = useProjectileMode and 9999 or Distance.Value
+						local effectiveDistance = useProjectileMode and Distance.Value or Distance.Value
 						
 						local ent = KillauraTarget.Enabled and store.KillauraTarget or entitylib.EntityPosition({
 							Range = effectiveDistance,
@@ -1300,41 +1299,29 @@ run(function()
 							end
 							
 							if useProjectileMode then
-								local originPos = entitylib.character.RootPart.Position
-								local distance = (aimPosition - originPos).Magnitude
-								
 								local projSpeed = 100 
-								local gravity = 196.2
-								
 								if store.hand.tool then
-									local toolName = store.hand.tool.Name
-									if toolName:find("crossbow") then
-										projSpeed = 200
-									elseif toolName:find("headhunter") then
-										projSpeed = 180
+									local toolMeta = bedwars.ItemMeta[store.hand.tool.Name]
+									if toolMeta and toolMeta.projectileSource then
+										local projectileType = toolMeta.projectileSource.projectileType('arrow')
+										local projectileMeta = bedwars.ProjectileMeta[projectileType]
+										if projectileMeta then
+											projSpeed = projectileMeta.speed or 100
+										end
 									end
 								end
 								
-								local balloons = ent.Character:GetAttribute('InflatedBalloons')
-								local playerGravity = workspace.Gravity
-								if balloons and balloons > 0 then
-									playerGravity = workspace.Gravity * math.max(1 - (balloons * 0.05), 0.7)
-								end
+								local distance = (aimPosition - entitylib.character.RootPart.Position).Magnitude
+								local timeToTarget = distance / projSpeed
 								
-								local predictedPosition = prediction.predictStrafingMovement(
-									ent.Player,
-									ent.RootPart,
-									projSpeed,
-									gravity,
-									originPos
-								)
+								local targetVelocity = ent.RootPart.Velocity
+								local predictedPosition = aimPosition + (targetVelocity * timeToTarget)
 								
-								if predictedPosition then
-									aimPosition = predictedPosition
-								end
+								local predictionAmount = math.min(timeToTarget * 0.8, 1.5) 
+								predictedPosition = aimPosition + (targetVelocity * predictionAmount)
 								
 								if VerticalAim.Enabled then
-									aimPosition = aimPosition + Vector3.new(0, VerticalOffset.Value, 0)
+									predictedPosition = predictedPosition + Vector3.new(0, VerticalOffset.Value, 0)
 								end
 								
 								local finalAimSpeed = ProjectileAimSpeed.Value
@@ -1342,7 +1329,7 @@ run(function()
 									finalAimSpeed = finalAimSpeed + 3
 								end
 								
-								local targetCFrame = CFrame.lookAt(gameCamera.CFrame.p, aimPosition)
+								local targetCFrame = CFrame.lookAt(gameCamera.CFrame.p, predictedPosition)
 								if SmoothMode.Value == "Linear" then
 									gameCamera.CFrame = gameCamera.CFrame:Lerp(targetCFrame, finalAimSpeed * dt)
 								elseif SmoothMode.Value == "Elastic" then
@@ -1628,330 +1615,232 @@ run(function()
 end)
 
 run(function()
-    local KitRender
-    KitRender = vape.Categories.Render:CreateModule({
+    vape.Categories.Render:CreateModule({
         Name = 'Kit Render',
         Function = function(callback)
-            if callback then
-                local Players = game:GetService("Players")
-                local player = Players.LocalPlayer
-                local PlayerGui = player:WaitForChild("PlayerGui")
+            local Players = game:GetService("Players")
+            local player = Players.LocalPlayer
+            local PlayerGui = player:WaitForChild("PlayerGui")
 
-                local ids = {
-                    ['none'] = "rbxassetid://16493320215",
-                    ["random"] = "rbxassetid://79773209697352",
-                    ["cowgirl"] = "rbxassetid://9155462968",
-                    ["davey"] = "rbxassetid://9155464612",
-                    ["warlock"] = "rbxassetid://15186338366",
-                    ["ember"] = "rbxassetid://9630017904",
-                    ["black_market_trader"] = "rbxassetid://9630017904",
-                    ["yeti"] = "rbxassetid://9166205917",
-                    ["scarab"] = "rbxassetid://137137517627492",
-                    ["defender"] = "rbxassetid://131690429591874",
-                    ["cactus"] = "rbxassetid://104436517801089",
-                    ["oasis"] = "rbxassetid://120283205213823",
-                    ["berserker"] = "rbxassetid://90258047545241",
-                    ["sword_shield"] = "rbxassetid://131690429591874",
-                    ["airbender"] = "rbxassetid://74712750354593",
-                    ["gun_blade"] = "rbxassetid://138231219644853",
-                    ["frost_hammer_kit"] = "rbxassetid://11838567073",
-                    ["spider_queen"] = "rbxassetid://95237509752482",
-                    ["archer"] = "rbxassetid://9224796984",
-                    ["axolotl"] = "rbxassetid://9155466713",
-                    ["baker"] = "rbxassetid://9155463919",
-                    ["barbarian"] = "rbxassetid://9166207628",
-                    ["builder"] = "rbxassetid://9155463708",
-                    ["necromancer"] = "rbxassetid://11343458097",
-                    ["cyber"] = "rbxassetid://9507126891",
-                    ["sorcerer"] = "rbxassetid://97940108361528",
-                    ["bigman"] = "rbxassetid://9155467211",
-                    ["spirit_assassin"] = "rbxassetid://10406002412",
-                    ["farmer_cletus"] = "rbxassetid://9155466936",
-                    ["ice_queen"] = "rbxassetid://9155466204",
-                    ["grim_reaper"] = "rbxassetid://9155467410",
-                    ["spirit_gardener"] = "rbxassetid://132108376114488",
-                    ["hannah"] = "rbxassetid://10726577232",
-                    ["shielder"] = "rbxassetid://9155464114",
-                    ["summoner"] = "rbxassetid://18922378956",
-                    ["glacial_skater"] = "rbxassetid://84628060516931",
-                    ["dragon_sword"] = "rbxassetid://16215630104",
-                    ["lumen"] = "rbxassetid://9630018371",
-                    ["flower_bee"] = "rbxassetid://101569742252812",
-                    ["jellyfish"] = "rbxassetid://18129974852",
-                    ["melody"] = "rbxassetid://9155464915",
-                    ["mimic"] = "rbxassetid://14783283296",
-                    ["miner"] = "rbxassetid://9166208461",
-                    ["nazar"] = "rbxassetid://18926951849",
-                    ["seahorse"] = "rbxassetid://11902552560",
-                    ["elk_master"] = "rbxassetid://15714972287",
-                    ["rebellion_leader"] = "rbxassetid://18926409564",
-                    ["void_hunter"] = "rbxassetid://122370766273698",
-                    ["taliyah"] = "rbxassetid://13989437601",
-                    ["angel"] = "rbxassetid://9166208240",
-                    ["harpoon"] = "rbxassetid://18250634847",
-                    ["void_walker"] = "rbxassetid://78915127961078",
-                    ["spirit_summoner"] = "rbxassetid://95760990786863",
-                    ["triple_shot"] = "rbxassetid://9166208149",
-                    ["void_knight"] = "rbxassetid://73636326782144",
-                    ["regent"] = "rbxassetid://9166208904",
-                    ["vulcan"] = "rbxassetid://9155465543",
-                    ["owl"] = "rbxassetid://12509401147",
-                    ["dasher"] = "rbxassetid://9155467645",
-                    ["disruptor"] = "rbxassetid://11596993583",
-                    ["wizard"] = "rbxassetid://13353923546",
-                    ["aery"] = "rbxassetid://9155463221",
-                    ["agni"] = "rbxassetid://17024640133",
-                    ["alchemist"] = "rbxassetid://9155462512",
-                    ["spearman"] = "rbxassetid://9166207341",
-                    ["beekeeper"] = "rbxassetid://9312831285",
-                    ["falconer"] = "rbxassetid://17022941869",
-                    ["bounty_hunter"] = "rbxassetid://9166208649",
-                    ["blood_assassin"] = "rbxassetid://12520290159",
-                    ["battery"] = "rbxassetid://10159166528",
-                    ["steam_engineer"] = "rbxassetid://15380413567",
-                    ["vesta"] = "rbxassetid://9568930198",
-                    ["beast"] = "rbxassetid://9155465124",
-                    ["dino_tamer"] = "rbxassetid://9872357009",
-                    ["drill"] = "rbxassetid://12955100280",
-                    ["elektra"] = "rbxassetid://13841413050",
-                    ["fisherman"] = "rbxassetid://9166208359",
-                    ["queen_bee"] = "rbxassetid://12671498918",
-                    ["card"] = "rbxassetid://13841410580",
-                    ["frosty"] = "rbxassetid://9166208762",
-                    ["gingerbread_man"] = "rbxassetid://9155464364",
-                    ["ghost_catcher"] = "rbxassetid://9224802656",
-                    ["tinker"] = "rbxassetid://17025762404",
-                    ["ignis"] = "rbxassetid://13835258938",
-                    ["oil_man"] = "rbxassetid://9166206259",
-                    ["jade"] = "rbxassetid://9166306816",
-                    ["dragon_slayer"] = "rbxassetid://10982192175",
-                    ["paladin"] = "rbxassetid://11202785737",
-                    ["pinata"] = "rbxassetid://10011261147",
-                    ["merchant"] = "rbxassetid://9872356790",
-                    ["metal_detector"] = "rbxassetid://9378298061",
-                    ["slime_tamer"] = "rbxassetid://15379766168",
-                    ["nyoka"] = "rbxassetid://17022941410",
-                    ["midnight"] = "rbxassetid://9155462763",
-                    ["pyro"] = "rbxassetid://9155464770",
-                    ["raven"] = "rbxassetid://9166206554",
-                    ["santa"] = "rbxassetid://9166206101",
-                    ["sheep_herder"] = "rbxassetid://9155465730",
-                    ["smoke"] = "rbxassetid://9155462247",
-                    ["spirit_catcher"] = "rbxassetid://9166207943",
-                    ["star_collector"] = "rbxassetid://9872356516",
-                    ["styx"] = "rbxassetid://17014536631",
-                    ["block_kicker"] = "rbxassetid://15382536098",
-                    ["trapper"] = "rbxassetid://9166206875",
-                    ["hatter"] = "rbxassetid://12509388633",
-                    ["ninja"] = "rbxassetid://15517037848",
-                    ["jailor"] = "rbxassetid://11664116980",
-                    ["warrior"] = "rbxassetid://9166207008",
-                    ["mage"] = "rbxassetid://10982191792",
-                    ["void_dragon"] = "rbxassetid://10982192753",
-                    ["cat"] = "rbxassetid://15350740470",
-                    ["wind_walker"] = "rbxassetid://9872355499"
-                }
+            local ids = {
+                ['none'] = "rbxassetid://16493320215",
+                ["random"] = "rbxassetid://79773209697352",
+                ["cowgirl"] = "rbxassetid://9155462968",
+                ["davey"] = "rbxassetid://9155464612",
+                ["warlock"] = "rbxassetid://15186338366",
+                ["ember"] = "rbxassetid://9630017904",
+                ["black_market_trader"] = "rbxassetid://9630017904",
+                ["yeti"] = "rbxassetid://9166205917",
+                ["scarab"] = "rbxassetid://137137517627492",
+                ["defender"] = "rbxassetid://131690429591874",
+                ["cactus"] = "rbxassetid://104436517801089",
+                ["oasis"] = "rbxassetid://120283205213823",
+                ["berserker"] = "rbxassetid://90258047545241",
+                ["sword_shield"] = "rbxassetid://131690429591874",
+                ["airbender"] = "rbxassetid://74712750354593",
+                ["gun_blade"] = "rbxassetid://138231219644853",
+                ["frost_hammer_kit"] = "rbxassetid://11838567073",
+                ["spider_queen"] = "rbxassetid://95237509752482",
+                ["archer"] = "rbxassetid://9224796984",
+                ["axolotl"] = "rbxassetid://9155466713",
+                ["baker"] = "rbxassetid://9155463919",
+                ["barbarian"] = "rbxassetid://9166207628",
+                ["builder"] = "rbxassetid://9155463708",
+                ["necromancer"] = "rbxassetid://11343458097",
+                ["cyber"] = "rbxassetid://9507126891",
+                ["sorcerer"] = "rbxassetid://97940108361528",
+                ["bigman"] = "rbxassetid://9155467211",
+                ["spirit_assassin"] = "rbxassetid://10406002412",
+                ["farmer_cletus"] = "rbxassetid://9155466936",
+                ["ice_queen"] = "rbxassetid://9155466204",
+                ["grim_reaper"] = "rbxassetid://9155467410",
+                ["spirit_gardener"] = "rbxassetid://132108376114488",
+                ["hannah"] = "rbxassetid://10726577232",
+                ["shielder"] = "rbxassetid://9155464114",
+                ["summoner"] = "rbxassetid://18922378956",
+                ["glacial_skater"] = "rbxassetid://84628060516931",
+                ["dragon_sword"] = "rbxassetid://16215630104",
+                ["lumen"] = "rbxassetid://9630018371",
+                ["flower_bee"] = "rbxassetid://101569742252812",
+                ["jellyfish"] = "rbxassetid://18129974852",
+                ["melody"] = "rbxassetid://9155464915",
+                ["mimic"] = "rbxassetid://14783283296",
+                ["miner"] = "rbxassetid://9166208461",
+                ["nazar"] = "rbxassetid://18926951849",
+                ["seahorse"] = "rbxassetid://11902552560",
+                ["elk_master"] = "rbxassetid://15714972287",
+                ["rebellion_leader"] = "rbxassetid://18926409564",
+                ["void_hunter"] = "rbxassetid://122370766273698",
+                ["taliyah"] = "rbxassetid://13989437601",
+                ["angel"] = "rbxassetid://9166208240",
+                ["harpoon"] = "rbxassetid://18250634847",
+                ["void_walker"] = "rbxassetid://78915127961078",
+                ["spirit_summoner"] = "rbxassetid://95760990786863",
+                ["triple_shot"] = "rbxassetid://9166208149",
+                ["void_knight"] = "rbxassetid://73636326782144",
+                ["regent"] = "rbxassetid://9166208904",
+                ["vulcan"] = "rbxassetid://9155465543",
+                ["owl"] = "rbxassetid://12509401147",
+                ["dasher"] = "rbxassetid://9155467645",
+                ["disruptor"] = "rbxassetid://11596993583",
+                ["wizard"] = "rbxassetid://13353923546",
+                ["aery"] = "rbxassetid://9155463221",
+                ["agni"] = "rbxassetid://17024640133",
+                ["alchemist"] = "rbxassetid://9155462512",
+                ["spearman"] = "rbxassetid://9166207341",
+                ["beekeeper"] = "rbxassetid://9312831285",
+                ["falconer"] = "rbxassetid://17022941869",
+                ["bounty_hunter"] = "rbxassetid://9166208649",
+                ["blood_assassin"] = "rbxassetid://12520290159",
+                ["battery"] = "rbxassetid://10159166528",
+                ["steam_engineer"] = "rbxassetid://15380413567",
+                ["vesta"] = "rbxassetid://9568930198",
+                ["beast"] = "rbxassetid://9155465124",
+                ["dino_tamer"] = "rbxassetid://9872357009",
+                ["drill"] = "rbxassetid://12955100280",
+                ["elektra"] = "rbxassetid://13841413050",
+                ["fisherman"] = "rbxassetid://9166208359",
+                ["queen_bee"] = "rbxassetid://12671498918",
+                ["card"] = "rbxassetid://13841410580",
+                ["frosty"] = "rbxassetid://9166208762",
+                ["gingerbread_man"] = "rbxassetid://9155464364",
+                ["ghost_catcher"] = "rbxassetid://9224802656",
+                ["tinker"] = "rbxassetid://17025762404",
+                ["ignis"] = "rbxassetid://13835258938",
+                ["oil_man"] = "rbxassetid://9166206259",
+                ["jade"] = "rbxassetid://9166306816",
+                ["dragon_slayer"] = "rbxassetid://10982192175",
+                ["paladin"] = "rbxassetid://11202785737",
+                ["pinata"] = "rbxassetid://10011261147",
+                ["merchant"] = "rbxassetid://9872356790",
+                ["metal_detector"] = "rbxassetid://9378298061",
+                ["slime_tamer"] = "rbxassetid://15379766168",
+                ["nyoka"] = "rbxassetid://17022941410",
+                ["midnight"] = "rbxassetid://9155462763",
+                ["pyro"] = "rbxassetid://9155464770",
+                ["raven"] = "rbxassetid://9166206554",
+                ["santa"] = "rbxassetid://9166206101",
+                ["sheep_herder"] = "rbxassetid://9155465730",
+                ["smoke"] = "rbxassetid://9155462247",
+                ["spirit_catcher"] = "rbxassetid://9166207943",
+                ["star_collector"] = "rbxassetid://9872356516",
+                ["styx"] = "rbxassetid://17014536631",
+                ["block_kicker"] = "rbxassetid://15382536098",
+                ["trapper"] = "rbxassetid://9166206875",
+                ["hatter"] = "rbxassetid://12509388633",
+                ["ninja"] = "rbxassetid://15517037848",
+                ["jailor"] = "rbxassetid://11664116980",
+                ["warrior"] = "rbxassetid://9166207008",
+                ["mage"] = "rbxassetid://10982191792",
+                ["void_dragon"] = "rbxassetid://10982192753",
+                ["cat"] = "rbxassetid://15350740470",
+                ["wind_walker"] = "rbxassetid://9872355499"
+            }
 
-                KitRender.Connections = {}
-                KitRender.RunningLoops = {}
-                KitRender.IsEnabled = true
+            local function createkitrender(plr)
+                local icon = Instance.new("ImageLabel")
+                icon.Name = "ReVapeKitRender"
+                icon.AnchorPoint = Vector2.new(1, 0.5)
+                icon.BackgroundTransparency = 1
+                icon.Position = UDim2.new(1.05, 0, 0.5, 0)
+                icon.Size = UDim2.new(1.5, 0, 1.5, 0)
+                icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+                icon.ImageTransparency = 0.4
+                icon.ScaleType = Enum.ScaleType.Crop
+                local uar = Instance.new("UIAspectRatioConstraint")
+                uar.AspectRatio = 1
+                uar.AspectType = Enum.AspectType.FitWithinMaxSize
+                uar.DominantAxis = Enum.DominantAxis.Width
+                uar.Parent = icon
+                icon.Image = ids[plr:GetAttribute("PlayingAsKits")] or ids["none"]
+                return icon
+            end
 
-                local function createkitrender(plr)
-                    if not plr then return nil end
-                    local success, icon = pcall(function()
-                        local icon = Instance.new("ImageLabel")
-                        icon.Name = "ReVapeKitRender"
-                        icon.AnchorPoint = Vector2.new(1, 0.5)
-                        icon.BackgroundTransparency = 1
-                        icon.Position = UDim2.new(1.05, 0, 0.5, 0)
-                        icon.Size = UDim2.new(1.5, 0, 1.5, 0)
-                        icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
-                        icon.ImageTransparency = 0.4
-                        icon.ScaleType = Enum.ScaleType.Crop
-                        local uar = Instance.new("UIAspectRatioConstraint")
-                        uar.AspectRatio = 1
-                        uar.AspectType = Enum.AspectType.FitWithinMaxSize
-                        uar.DominantAxis = Enum.DominantAxis.Width
-                        uar.Parent = icon
-                        local kitName = plr:GetAttribute("PlayingAsKit")
-                        icon.Image = ids[kitName] or ids["none"]
-                        return icon
-                    end)
-                    return success and icon or nil
-                end
-
-                local function refreshicon(icon, plr)
-                    if not icon or not icon.Parent or not plr then return end
-                    pcall(function()
-                        local kitName = plr:GetAttribute("PlayingAsKit")
-                        icon.Image = ids[kitName] or ids["none"]
-                    end)
-                end
-
-                local function findPlayer(label, container)
-                    if not label or not container then return nil end
-                    
-                    local success, render = pcall(function()
-                        return container:FindFirstChild("PlayerRender", true)
-                    end)
-                    
-                    if success and render and render:IsA("ImageLabel") and render.Image then
-                        local userId = string.match(render.Image, "id=(%d+)")
-                        if userId then
-                            local plr = Players:GetPlayerByUserId(tonumber(userId))
-                            if plr then return plr end
-                        end
+            local function removeallkitrenders()
+                for _, v in ipairs(PlayerGui:GetDescendants()) do
+                    if v:IsA("ImageLabel") and v.Name == "ReVapeKitRender" then
+                        v:Destroy()
                     end
-                    
-                    local text = label.Text
-                    for _, plr in ipairs(Players:GetPlayers()) do
-                        if plr.Name == text or plr.DisplayName == text then
-                            return plr
-                        end
-                        local disguise = plr:GetAttribute("DisguiseDisplayName")
-                        if disguise and disguise == text then
-                            return plr
-                        end
+                end
+            end
+
+            local function refreshicon(icon, plr)
+                icon.Image = ids[plr:GetAttribute("PlayingAsKits")] or ids["none"]
+            end
+
+            local function findPlayer(label, container)
+                local render = container:FindFirstChild("PlayerRender", true)
+                if render and render:IsA("ImageLabel") and render.Image then
+                    local userId = string.match(render.Image, "id=(%d+)")
+                    if userId then
+                        local plr = Players:GetPlayerByUserId(tonumber(userId))
+                        if plr then return plr end
                     end
-                    
-                    return nil
                 end
-
-                local function handleLabel(label)
-                    if not label or not label:IsA("TextLabel") or label.Name ~= "PlayerName" then return end
-                    if not KitRender.IsEnabled then return end
-                    
-                    task.spawn(function()
-                        local success, err = pcall(function()
-                            local container = label.Parent
-                            for _ = 1, 3 do
-                                if container and container.Parent then
-                                    container = container.Parent
-                                end
-                            end
-                            
-                            if not container or not container:IsA("Frame") then return end
-                            
-                            local playerFound = findPlayer(label, container)
-                            if not playerFound then
-                                task.wait(0.5)
-                                playerFound = findPlayer(label, container)
-                            end
-                            
-                            if not playerFound then return end
-                            
-                            container.Name = playerFound.Name
-                            
-                            local card = container:FindFirstChild("1")
-                            if card then
-                                card = card:FindFirstChild("MatchDraftPlayerCard")
-                            end
-                            
-                            if not card then return end
-                            
-                            local icon = card:FindFirstChild("ReVapeKitRender")
-                            if not icon then
-                                icon = createkitrender(playerFound)
-                                if icon then
-                                    icon.Parent = card
-                                end
-                            end
-                            
-                            if not icon then return end
-                            
-                            local loopKey = tostring(container)..tostring(playerFound.UserId)
-                            KitRender.RunningLoops[loopKey] = task.spawn(function()
-                                while container and container.Parent and icon and icon.Parent and KitRender.IsEnabled do
-                                    local updatedPlayer = findPlayer(label, container)
-                                    if updatedPlayer and updatedPlayer ~= playerFound then
-                                        playerFound = updatedPlayer
-                                    end
-                                    if playerFound then
-                                        refreshicon(icon, playerFound)
-                                    end
-                                    task.wait(1)
-                                end
-                                if KitRender.RunningLoops then
-                                    KitRender.RunningLoops[loopKey] = nil
-                                end
-                            end)
-                        end)
-                        
-                        if not success then
-                            warn("KitRender handleLabel error:", err)
-                        end
-                    end)
+                local text = label.Text
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr.Name == text or plr.DisplayName == text or plr:GetAttribute("DisguiseDisplayName") == text then
+                        return plr
+                    end
                 end
+            end
 
+            local function handleLabel(label)
+                if not (label:IsA("TextLabel") and label.Name == "PlayerName") then return end
                 task.spawn(function()
-                    local success, team2 = pcall(function()
-                        local app = PlayerGui:WaitForChild("MatchDraftApp", 10)
-                        if not app then return nil end
-                        local bg = app:WaitForChild("DraftAppBackground", 5)
-                        if not bg then return nil end
-                        local body = bg:WaitForChild("BodyContainer", 5)
-                        if not body then return nil end
-                        return body:WaitForChild("Team2Column", 5)
+                    local container = label.Parent
+                    for _ = 1, 3 do
+                        if container and container.Parent then
+                            container = container.Parent
+                        end
+                    end
+                    if not container or not container:IsA("Frame") then return end
+                    local playerFound = findPlayer(label, container)
+                    if not playerFound then
+                        task.wait(0.5)
+                        playerFound = findPlayer(label, container)
+                    end
+                    if not playerFound then return end
+                    container.Name = playerFound.Name
+                    local card = container:FindFirstChild("1") and container["1"]:FindFirstChild("MatchDraftPlayerCard")
+                    if not card then return end
+                    local icon = card:FindFirstChild("ReVapeKitRender")
+                    if not icon then
+                        icon = createkitrender(playerFound)
+                        icon.Parent = card
+                    end
+                    task.spawn(function()
+                        while container and container.Parent do
+                            local updatedPlayer = findPlayer(label, container)
+                            if updatedPlayer and updatedPlayer ~= playerFound then
+                                playerFound = updatedPlayer
+                            end
+                            if playerFound and icon then
+                                refreshicon(icon, playerFound)
+                            end
+                            task.wait(1)
+                        end
                     end)
-                    
-                    if not success or not team2 then return end
+                end)
+            end
+
+            if callback then
+                task.spawn(function()
+                    local team2 = PlayerGui:WaitForChild("MatchDraftApp")
+                        :WaitForChild("DraftAppBackground")
+                        :WaitForChild("BodyContainer")
+                        :WaitForChild("Team2Column")
 
                     for _, child in ipairs(team2:GetDescendants()) do
-                        if KitRender.IsEnabled then
-                            handleLabel(child)
-                        end
+                        handleLabel(child)
                     end
 
-                    local conn = team2.DescendantAdded:Connect(function(child)
-                        if KitRender.IsEnabled then
-                            handleLabel(child)
-                        end
+                    team2.DescendantAdded:Connect(function(child)
+                        handleLabel(child)
                     end)
-                    
-                    if KitRender.Connections then
-                        table.insert(KitRender.Connections, conn)
-                    end
                 end)
             else
-                if KitRender then
-                    KitRender.IsEnabled = false
-                end
-                
-                if KitRender.Connections then
-                    for _, connection in pairs(KitRender.Connections) do
-                        pcall(function()
-                            if connection and typeof(connection) == "RBXScriptConnection" then
-                                connection:Disconnect()
-                            end
-                        end)
-                    end
-                    table.clear(KitRender.Connections)
-                    KitRender.Connections = nil
-                end
-                
-                if KitRender.RunningLoops then
-                    for _, loopTask in pairs(KitRender.RunningLoops) do
-                        pcall(function()
-                            if loopTask and typeof(loopTask) == "thread" then
-                                task.cancel(loopTask)
-                            end
-                        end)
-                    end
-                    table.clear(KitRender.RunningLoops)
-                    KitRender.RunningLoops = nil
-                end
-                
-                local success, PlayerGui = pcall(function()
-                    return Players.LocalPlayer:FindFirstChild("PlayerGui")
-                end)
-                
-                if success and PlayerGui then
-                    for _, v in ipairs(PlayerGui:GetDescendants()) do
-                        if v:IsA("ImageLabel") and v.Name == "ReVapeKitRender" then
-                            pcall(function() v:Destroy() end)
-                        end
-                    end
-                end
+                removeallkitrenders()
             end
         end,
         Tooltip = 'Shows kit icons next to player names in the match draft screen'
@@ -2797,8 +2686,6 @@ run(function()
     local AnimationSpeed
     local AnimationTween
     local Limit
-	local SwingAngleSlider
-    local LegitAura
     local SyncHits
     local lastAttackTime = 0
     local lastManualSwing = 0
@@ -2950,15 +2837,6 @@ run(function()
             if store.hand.toolType ~= 'sword' or bedwars.DaoController.chargingMaid then return false end
         end
 
-        if LegitAura.Enabled then
-            local isSwinging = inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-            local timeSinceLastSwing = workspace:GetServerTimeNow() - bedwars.SwordController.lastAttack
-            local recentlySwung = timeSinceLastSwing < 0.3
-            if not isSwinging and not recentlySwung then
-                return false
-            end
-        end
-
         if SwingTime.Enabled then
             local swingSpeed = SwingTimeSlider.Value
             return sword, meta, (tick() - lastAttackTime) >= swingSpeed
@@ -2983,33 +2861,19 @@ run(function()
 	local function shouldContinueSwinging()
 		if not ContinueSwinging.Enabled then return false end
 		
-		local plrs = entitylib.AllPosition({
-			Range = AttackRange.Value,
-			Wallcheck = Targets.Walls.Enabled or nil,
-			Part = 'RootPart',
-			Players = Targets.Players.Enabled,
-			NPCs = Targets.NPCs.Enabled,
-			Limit = MaxTargets.Value
-		})
-		
-		if #plrs > 0 then
-			lastTargetTime = tick()
-			continueSwingCount = 0
-			return false
+		if lastTargetTime > 0 then
+			local timeSinceLastTarget = tick() - lastTargetTime
+			local swingDuration = ContinueSwingTime.Value
+			
+			if timeSinceLastTarget <= swingDuration then
+				return true
+			else
+				lastTargetTime = 0
+				continueSwingCount = 0
+				return false
+			end
 		end
 		
-		if lastTargetTime == 0 then
-			return false
-		end
-		
-		local timeSinceLastTarget = tick() - lastTargetTime
-		local swingDuration = ContinueSwingTime.Value
-		
-		if timeSinceLastTarget <= swingDuration then
-			return true
-		end
-		
-		continueSwingCount = 0
 		return false
 	end
 
@@ -3094,19 +2958,21 @@ run(function()
                     end)
                 end
 
-                repeat
-                    pcall(function()
-                        if entitylib.isAlive and entitylib.character.HumanoidRootPart then
-                            TweenService:Create(RangeCirclePart, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = entitylib.character.HumanoidRootPart.Position - Vector3.new(0, entitylib.character.Humanoid.HipHeight, 0)}):Play()
-                        end
-                    end)
-                    local attacked, sword, meta, canAttack = {}, getAttackData()
-                    Attacking = false
-                    store.KillauraTarget = nil
-                    pcall(function() vapeTargetInfo.Targets.Killaura = nil end)
+				repeat
+					pcall(function()
+						if entitylib.isAlive and entitylib.character.HumanoidRootPart then
+							TweenService:Create(RangeCirclePart, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = entitylib.character.HumanoidRootPart.Position - Vector3.new(0, entitylib.character.Humanoid.HipHeight, 0)}):Play()
+						end
+					end)
+					local attacked, sword, meta, canAttack = {}, getAttackData()
+					Attacking = false
+					store.KillauraTarget = nil
+					pcall(function() vapeTargetInfo.Targets.Killaura = nil end)
 
 					local shouldSwing = shouldContinueSwinging()
-					if sword and (canAttack or (shouldSwing and lastTargetTime > 0)) then
+					local hasValidTarget = false
+					
+					if sword and (canAttack or shouldSwing) then
 						if sigridcheck and entitylib.isAlive and lplr.Character:FindFirstChild("elk") then return end
 						local isClaw = string.find(string.lower(tostring(sword and sword.itemType or "")), "summoner_claw")
 						local plrs = entitylib.AllPosition({
@@ -3119,23 +2985,38 @@ run(function()
 							Sort = sortmethods[Sort.Value]
 						})
 						
-						if #plrs > 0 then
-							lastTargetTime = tick()
-							continueSwingCount = 0
-						elseif lastTargetTime == 0 then
-							lastTargetTime = 0
-						end
-						
 						switchItem(sword.tool, 0)
 						local selfpos = entitylib.character.RootPart.Position
 						local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
 
+						local validTargets = {}
 						if #plrs > 0 then
 							for _, v in plrs do
 								local delta = (v.RootPart.Position - selfpos)
 								local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
-								local swingAngle = SwingAngleSlider and math.rad(SwingAngleSlider.Value) or math.rad(AngleSlider.Value)
-								if angle > (swingAngle / 2) then continue end
+								local maxAngle = math.rad(AngleSlider.Value)
+								local canSwing = delta.Magnitude <= SwingRange.Value  
+								local canHit = delta.Magnitude <= AttackRange.Value   
+								
+								if angle <= (maxAngle / 2) and canSwing then
+									table.insert(validTargets, v)
+									hasValidTarget = true
+								end
+							end
+						end
+						
+						if hasValidTarget then
+							lastTargetTime = tick()
+							continueSwingCount = 0
+						elseif lastTargetTime > 0 and not hasValidTarget then
+							if not shouldSwing then
+								lastTargetTime = tick()
+							end
+						end
+						
+						if #validTargets > 0 then
+							for _, v in validTargets do
+								local delta = (v.RootPart.Position - selfpos)
 
 								table.insert(attacked, {
 									Entity = v,
@@ -3156,7 +3037,7 @@ run(function()
 									Attacking = true
 									store.KillauraTarget = v
 									if not isClaw then
-										if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
+										if not Swing.Enabled and AnimDelay <= tick() then
 											local swingSpeed = 0.25
 											if SwingTime.Enabled then
 												swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
@@ -3175,11 +3056,6 @@ run(function()
 										end
 									end
 								end
-
-								local canHit = delta.Magnitude <= AttackRange.Value
-								local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 5) 
-
-								if not canHit and not extendedRangeCheck then continue end
 
 								if SyncHits.Enabled then
 									local swingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
@@ -3245,10 +3121,9 @@ run(function()
 								end
 							end
 						elseif shouldSwing then
-
 							Attacking = true
 							if not isClaw then
-								if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
+								if not Swing.Enabled and AnimDelay <= tick() then
 									local swingSpeed = 0.25
 									if SwingTime.Enabled then
 										swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
@@ -3304,29 +3179,29 @@ run(function()
 						end
 					end
 
-                    pcall(function()
-                        for i, v in Boxes do
-                            v.Adornee = attacked[i] and attacked[i].Entity.RootPart or nil
-                            if v.Adornee then
-                                v.Color3 = Color3.fromHSV(attacked[i].Check.Hue, attacked[i].Check.Sat, attacked[i].Check.Value)
-                                v.Transparency = 1 - attacked[i].Check.Opacity
-                            end
-                        end
+					pcall(function()
+						for i, v in Boxes do
+							v.Adornee = attacked[i] and attacked[i].Entity.RootPart or nil
+							if v.Adornee then
+								v.Color3 = Color3.fromHSV(attacked[i].Check.Hue, attacked[i].Check.Sat, attacked[i].Check.Value)
+								v.Transparency = 1 - attacked[i].Check.Opacity
+							end
+						end
 
-                        for i, v in Particles do
-                            v.Position = attacked[i] and attacked[i].Entity.RootPart.Position or Vector3.new(9e9, 9e9, 9e9)
-                            v.Parent = attacked[i] and gameCamera or nil
-                        end
-                    end)
+						for i, v in Particles do
+							v.Position = attacked[i] and attacked[i].Entity.RootPart.Position or Vector3.new(9e9, 9e9, 9e9)
+							v.Parent = attacked[i] and gameCamera or nil
+						end
+					end)
 
-                    if Face.Enabled and attacked[1] then
-                        local vec = attacked[1].Entity.RootPart.Position * Vector3.new(1, 0, 1)
-                        entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
-                    end
-                    pcall(function() if RangeCirclePart ~= nil then RangeCirclePart.Parent = gameCamera end end)
+					if Face.Enabled and attacked[1] then
+						local vec = attacked[1].Entity.RootPart.Position * Vector3.new(1, 0, 1)
+						entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
+					end
+					pcall(function() if RangeCirclePart ~= nil then RangeCirclePart.Parent = gameCamera end end)
 
-                    task.wait(1 / UpdateRate.Value)
-                until not Killaura.Enabled
+					task.wait(1 / UpdateRate.Value)
+				until not Killaura.Enabled
 			else
 				lastTargetTime = 0
 				continueSwingCount = 0
@@ -3414,12 +3289,6 @@ run(function()
         Max = 360,
         Default = 360
     })
-	SwingAngleSlider = Killaura:CreateSlider({
-		Name = 'Swing angle',
-		Min = 1,
-		Max = 360,
-		Default = 360
-	})
     UpdateRate = Killaura:CreateSlider({
         Name = 'Update rate',
         Min = 1,
@@ -3658,10 +3527,6 @@ run(function()
             end
         end,
         Tooltip = 'Only attacks when the sword is held'
-    })
-    LegitAura = Killaura:CreateToggle({
-        Name = 'Swing only',
-        Tooltip = 'Only attacks while swinging manually'
     })
     Killaura:CreateToggle({
         Name = "Sigrid Check",
@@ -4827,6 +4692,7 @@ run(function()
 	local AutoShootSwitchSpeed
 	local AutoShootRange
 	local AutoShootFOV
+	local AutoShootWaitDelay
 	local lastAutoShootTime = 0
 	local autoShootEnabled = false
 	local KillauraTargetCheck
@@ -4940,7 +4806,7 @@ run(function()
 							local bows = getBows()
 							if #bows > 0 then
 								_G.autoShootLock = true
-								task.wait(0.15)
+								task.wait(AutoShootWaitDelay.Value)
 								local selected = store.inventory.hotbarSlot
 								for _, v in bows do
 									if hotbarSwitch(v) then
@@ -5038,6 +4904,16 @@ run(function()
 		Tooltip = 'Delay between switching and shooting (lower = faster)'
 	})
 	
+	AutoShootWaitDelay = AutoShoot:CreateSlider({
+		Name = 'Wait Delay',
+		Min = 0,
+		Max = 1,
+		Default = 0,
+		Decimal = 100,
+		Suffix = 's',
+		Tooltip = 'Delay before shooting (helps prevent ghosting)'
+	})
+	
 	AutoShootRange = AutoShoot:CreateSlider({
 		Name = 'Range',
 		Min = 1,
@@ -5073,6 +4949,7 @@ end)
 run(function()
 	local AutoGloopInterval
 	local AutoGloopSwitchSpeed
+	local AutoGloopWaitDelay
 	local AutoGloopRange
 	local AutoGloopFOV
 	local lastAutoGloopTime = 0
@@ -5196,6 +5073,7 @@ run(function()
 									for _, gloopSlot in gloops do
 										if hotbarSwitch(gloopSlot) then
 											task.wait(AutoGloopSwitchSpeed.Value)
+											task.wait(AutoGloopWaitDelay.Value)
 											leftClick()
 											task.wait(0.05)
 										end
@@ -5242,6 +5120,16 @@ run(function()
 		Tooltip = 'Delay between switching and throwing (lower = faster)'
 	})
 	
+	AutoGloopWaitDelay = AutoGloop:CreateSlider({
+		Name = 'Wait Delay',
+		Min = 0,
+		Max = 1,
+		Default = 0,
+		Decimal = 100,
+		Suffix = 's',
+		Tooltip = 'Delay before throwing (helps prevent ghosting)'
+	})
+	
 	AutoGloopRange = AutoGloop:CreateSlider({
 		Name = 'Range',
 		Min = 1,
@@ -5277,6 +5165,7 @@ end)
 run(function()
 	local AutoFireballInterval
 	local AutoFireballSwitchSpeed
+	local AutoFireballWaitDelay
 	local AutoFireballRange
 	local AutoFireballFOV
 	local lastAutoFireballTime = 0
@@ -5390,6 +5279,7 @@ run(function()
 									for _, fireballSlot in fireballs do
 										if hotbarSwitch(fireballSlot) then
 											task.wait(AutoFireballSwitchSpeed.Value)
+											task.wait(AutoFireballWaitDelay.Value)
 											leftClick()
 											task.wait(0.05)
 										end
@@ -5436,6 +5326,16 @@ run(function()
 		Tooltip = 'Delay between switching and throwing (lower = faster)'
 	})
 	
+	AutoFireballWaitDelay = AutoFireball:CreateSlider({
+		Name = 'Wait Delay',
+		Min = 0,
+		Max = 1,
+		Default = 0,
+		Decimal = 100,
+		Suffix = 's',
+		Tooltip = 'Delay before throwing (helps prevent ghosting)'
+	})
+	
 	AutoFireballRange = AutoFireball:CreateSlider({
 		Name = 'Range',
 		Min = 1,
@@ -5470,11 +5370,18 @@ end)
 
 run(function()
 	local AutoFireInterval
+	local AutoFireWaitDelay
 	local autoFireEnabled = false
 	local lastAutoFireTime = 0
 	local wasHoldingBow = false
+	local KillauraTargetCheck
+	local FirstPersonCheck
 	
 	local VirtualInputManager = game:GetService("VirtualInputManager")
+	
+	local function isFirstPerson()
+		return gameCamera.CFrame.Position.Magnitude - (gameCamera.Focus.Position).Magnitude < 1
+	end
 	
 	local function leftClick()
 		pcall(function()
@@ -5503,6 +5410,14 @@ run(function()
 		return false
 	end
 	
+	local function hasValidTarget()
+		if KillauraTargetCheck.Enabled then
+			return store.KillauraTarget ~= nil
+		else
+			return true
+		end
+	end
+	
 	local AutoFire = vape.Categories.Utility:CreateModule({
 		Name = 'AutoFire',
 		Function = function(callback)
@@ -5514,15 +5429,25 @@ run(function()
 					repeat
 						task.wait(0.05)
 						if autoFireEnabled and entitylib.isAlive then
+							if FirstPersonCheck.Enabled and not isFirstPerson() then
+								continue
+							end
+							
+							if not hasValidTarget() then
+								continue
+							end
+							
 							local holdingBow = isHoldingBow()
 							
 							if holdingBow and not wasHoldingBow then
+								task.wait(AutoFireWaitDelay.Value)
 								leftClick()
 								lastAutoFireTime = tick()
 								wasHoldingBow = true
 							elseif holdingBow then
 								local currentTime = tick()
 								if (currentTime - lastAutoFireTime) >= AutoFireInterval.Value then
+									task.wait(AutoFireWaitDelay.Value)
 									lastAutoFireTime = currentTime
 									leftClick()
 								end
@@ -5549,7 +5474,29 @@ run(function()
 		Suffix = function(val)
 			return val == 1 and 'second' or 'seconds'
 		end,
-		Tooltip = 'desire lazy ass needed this LOL'
+		Tooltip = 'How fast to auto-fire (1.2 = every 1.2 seconds)'
+	})
+	
+	AutoFireWaitDelay = AutoFire:CreateSlider({
+		Name = 'Wait Delay',
+		Min = 0,
+		Max = 1,
+		Default = 0,
+		Decimal = 100,
+		Suffix = 's',
+		Tooltip = 'Delay before shooting (helps prevent ghosting)'
+	})
+	
+	KillauraTargetCheck = AutoFire:CreateToggle({
+		Name = 'Require Killaura Target',
+		Default = false,
+		Tooltip = 'Only auto-fire when Killaura has a target'
+	})
+	
+	FirstPersonCheck = AutoFire:CreateToggle({
+		Name = 'First Person Only',
+		Default = false,
+		Tooltip = 'Only works in first person mode'
 	})
 end)
 
@@ -8663,25 +8610,6 @@ run(function()
         return hasSupport or checkAdjacent(blockpos)
     end
     
-    local function isCornerPosition(playerPos, blockPos)
-        local root = entitylib.character.RootPart
-        local lookVector = root.CFrame.LookVector
-        local rightVector = root.CFrame.RightVector
-        
-        local offset = blockPos - playerPos
-        local flatOffset = Vector3.new(offset.X, 0, offset.Z)
-        
-        if flatOffset.Magnitude < 0.1 then
-            return false
-        end
-        
-        local normalizedOffset = flatOffset.Unit
-        local forwardDot = math.abs(lookVector:Dot(normalizedOffset))
-        local rightDot = math.abs(rightVector:Dot(normalizedOffset))
-        
-        return forwardDot > 0.3 and rightDot > 0.3
-    end
-    
     AutoBuildUp = vape.Categories.World:CreateModule({
         Name = 'AutoBuildUp',
         Function = function(callback)
@@ -8700,16 +8628,14 @@ run(function()
                                 if not block then
                                     blockpos = blockpos * 3
                                     
-                                    if not isCornerPosition(root.Position, blockpos) then
-                                        if checkAdjacent(blockpos) then
-                                            if canPlaceAtPosition(blockpos) then
-                                                task.spawn(bedwars.placeBlock, blockpos, wool, false)
-                                            end
-                                        else
-                                            local nearestBlock = blockProximity(currentpos)
-                                            if nearestBlock and not isCornerPosition(root.Position, nearestBlock) and canPlaceAtPosition(nearestBlock) then
-                                                task.spawn(bedwars.placeBlock, nearestBlock, wool, false)
-                                            end
+                                    if checkAdjacent(blockpos) then
+                                        if canPlaceAtPosition(blockpos) then
+                                            task.spawn(bedwars.placeBlock, blockpos, wool, false)
+                                        end
+                                    else
+                                        local nearestBlock = blockProximity(currentpos)
+                                        if nearestBlock and canPlaceAtPosition(nearestBlock) then
+                                            task.spawn(bedwars.placeBlock, nearestBlock, wool, false)
                                         end
                                     end
                                 end
@@ -8721,7 +8647,7 @@ run(function()
                 until not AutoBuildUp.Enabled
             end
         end,
-        Tooltip = 'Automatically places blocks under you ONLY when jumping (no corners)'
+        Tooltip = 'Automatically places blocks under you ONLY when jumping'
     })
     
     LimitItem = AutoBuildUp:CreateToggle({
