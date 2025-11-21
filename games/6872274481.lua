@@ -1,4 +1,5 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -2685,6 +2686,8 @@ run(function()
     local AnimationSpeed
     local AnimationTween
     local Limit
+	local SwingAngleSlider
+    local LegitAura
     local SyncHits
     local lastAttackTime = 0
     local lastManualSwing = 0
@@ -2836,6 +2839,15 @@ run(function()
             if store.hand.toolType ~= 'sword' or bedwars.DaoController.chargingMaid then return false end
         end
 
+        if LegitAura.Enabled then
+            local isSwinging = inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+            local timeSinceLastSwing = workspace:GetServerTimeNow() - bedwars.SwordController.lastAttack
+            local recentlySwung = timeSinceLastSwing < 0.3
+            if not isSwinging and not recentlySwung then
+                return false
+            end
+        end
+
         if SwingTime.Enabled then
             local swingSpeed = SwingTimeSlider.Value
             return sword, meta, (tick() - lastAttackTime) >= swingSpeed
@@ -2860,19 +2872,33 @@ run(function()
 	local function shouldContinueSwinging()
 		if not ContinueSwinging.Enabled then return false end
 		
-		if lastTargetTime > 0 then
-			local timeSinceLastTarget = tick() - lastTargetTime
-			local swingDuration = ContinueSwingTime.Value
-			
-			if timeSinceLastTarget <= swingDuration then
-				return true
-			else
-				lastTargetTime = 0
-				continueSwingCount = 0
-				return false
-			end
+		local plrs = entitylib.AllPosition({
+			Range = AttackRange.Value,
+			Wallcheck = Targets.Walls.Enabled or nil,
+			Part = 'RootPart',
+			Players = Targets.Players.Enabled,
+			NPCs = Targets.NPCs.Enabled,
+			Limit = MaxTargets.Value
+		})
+		
+		if #plrs > 0 then
+			lastTargetTime = tick()
+			continueSwingCount = 0
+			return false
 		end
 		
+		if lastTargetTime == 0 then
+			return false
+		end
+		
+		local timeSinceLastTarget = tick() - lastTargetTime
+		local swingDuration = ContinueSwingTime.Value
+		
+		if timeSinceLastTarget <= swingDuration then
+			return true
+		end
+		
+		continueSwingCount = 0
 		return false
 	end
 
@@ -2957,21 +2983,19 @@ run(function()
                     end)
                 end
 
-				repeat
-					pcall(function()
-						if entitylib.isAlive and entitylib.character.HumanoidRootPart then
-							TweenService:Create(RangeCirclePart, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = entitylib.character.HumanoidRootPart.Position - Vector3.new(0, entitylib.character.Humanoid.HipHeight, 0)}):Play()
-						end
-					end)
-					local attacked, sword, meta, canAttack = {}, getAttackData()
-					Attacking = false
-					store.KillauraTarget = nil
-					pcall(function() vapeTargetInfo.Targets.Killaura = nil end)
+                repeat
+                    pcall(function()
+                        if entitylib.isAlive and entitylib.character.HumanoidRootPart then
+                            TweenService:Create(RangeCirclePart, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = entitylib.character.HumanoidRootPart.Position - Vector3.new(0, entitylib.character.Humanoid.HipHeight, 0)}):Play()
+                        end
+                    end)
+                    local attacked, sword, meta, canAttack = {}, getAttackData()
+                    Attacking = false
+                    store.KillauraTarget = nil
+                    pcall(function() vapeTargetInfo.Targets.Killaura = nil end)
 
 					local shouldSwing = shouldContinueSwinging()
-					local hasValidTarget = false
-					
-					if sword and (canAttack or shouldSwing) then
+					if sword and (canAttack or (shouldSwing and lastTargetTime > 0)) then
 						if sigridcheck and entitylib.isAlive and lplr.Character:FindFirstChild("elk") then return end
 						local isClaw = string.find(string.lower(tostring(sword and sword.itemType or "")), "summoner_claw")
 						local plrs = entitylib.AllPosition({
@@ -2984,44 +3008,27 @@ run(function()
 							Sort = sortmethods[Sort.Value]
 						})
 						
+						if #plrs > 0 then
+							lastTargetTime = tick()
+							continueSwingCount = 0
+						elseif lastTargetTime == 0 then
+							lastTargetTime = 0
+						end
+						
 						switchItem(sword.tool, 0)
 						local selfpos = entitylib.character.RootPart.Position
 						local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
 
-						local validTargets = {}
 						if #plrs > 0 then
 							for _, v in plrs do
 								local delta = (v.RootPart.Position - selfpos)
 								local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
-								local maxAngle = math.rad(AngleSlider.Value)
-								local canSwing = delta.Magnitude <= SwingRange.Value  
-								local canHit = delta.Magnitude <= AttackRange.Value   
-
-								if angle <= (maxAngle / 2) and canSwing then
-									table.insert(validTargets, {entity = v, canHit = canHit})
-									hasValidTarget = true
-								end
-							end
-						end
-						
-						if hasValidTarget then
-							lastTargetTime = tick()
-							continueSwingCount = 0
-						elseif lastTargetTime > 0 and not hasValidTarget then
-							if not shouldSwing then
-								lastTargetTime = tick()
-							end
-						end
-						
-						if #validTargets > 0 then
-							for _, targetData in validTargets do
-								local v = targetData.entity
-								local canHit = targetData.canHit
-								local delta = (v.RootPart.Position - selfpos)
+								local swingAngle = SwingAngleSlider and math.rad(SwingAngleSlider.Value) or math.rad(AngleSlider.Value)
+								if angle > (swingAngle / 2) then continue end
 
 								table.insert(attacked, {
 									Entity = v,
-									Check = canHit and BoxAttackColor or BoxSwingColor
+									Check = delta.Magnitude > AttackRange.Value and BoxSwingColor or BoxAttackColor
 								})
 								targetinfo.Targets[v] = tick() + 1
 								pcall(function()
@@ -3038,7 +3045,7 @@ run(function()
 									Attacking = true
 									store.KillauraTarget = v
 									if not isClaw then
-										if not Swing.Enabled and AnimDelay <= tick() then
+										if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
 											local swingSpeed = 0.25
 											if SwingTime.Enabled then
 												swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
@@ -3057,6 +3064,11 @@ run(function()
 										end
 									end
 								end
+
+								local canHit = delta.Magnitude <= AttackRange.Value
+								local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 5) 
+
+								if not canHit and not extendedRangeCheck then continue end
 
 								if SyncHits.Enabled then
 									local swingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
@@ -3092,41 +3104,40 @@ run(function()
 										end
 									end
 
-									if canHit then 
-										if isClaw then
-											KaidaController:request(v.Character)
-										else
-											local attackData = {
-												weapon = sword.tool,
-												entityInstance = v.Character,
-												chargedAttack = {chargeRatio = 0},
-												validate = {
-													raycast = {
-														cameraPosition = {value = pos},
-														cursorDirection = {value = dir}
-													},
-													targetPosition = {value = targetPos},
-													selfPosition = {value = pos}
-												}
+									if isClaw then
+										KaidaController:request(v.Character)
+									else
+										local attackData = {
+											weapon = sword.tool,
+											entityInstance = v.Character,
+											chargedAttack = {chargeRatio = 0},
+											validate = {
+												raycast = {
+													cameraPosition = {value = pos},
+													cursorDirection = {value = dir}
+												},
+												targetPosition = {value = targetPos},
+												selfPosition = {value = pos}
 											}
-											
-											attackData.validate = attackData.validate or {}
-											attackData.validate.raycast = attackData.validate.raycast or {}
-											attackData.validate.targetPosition = attackData.validate.targetPosition or {value = targetPos}
-											attackData.validate.selfPosition = attackData.validate.selfPosition or {value = pos}
-											
-											attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
-											attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
-											
-											FireAttackRemote(attackData)
-										end
+										}
+										
+										attackData.validate = attackData.validate or {}
+										attackData.validate.raycast = attackData.validate.raycast or {}
+										attackData.validate.targetPosition = attackData.validate.targetPosition or {value = targetPos}
+										attackData.validate.selfPosition = attackData.validate.selfPosition or {value = pos}
+										
+										attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
+										attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
+										
+										FireAttackRemote(attackData)
 									end
 								end
 							end
 						elseif shouldSwing then
+
 							Attacking = true
 							if not isClaw then
-								if not Swing.Enabled and AnimDelay <= tick() then
+								if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
 									local swingSpeed = 0.25
 									if SwingTime.Enabled then
 										swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
@@ -3182,29 +3193,29 @@ run(function()
 						end
 					end
 
-					pcall(function()
-						for i, v in Boxes do
-							v.Adornee = attacked[i] and attacked[i].Entity.RootPart or nil
-							if v.Adornee then
-								v.Color3 = Color3.fromHSV(attacked[i].Check.Hue, attacked[i].Check.Sat, attacked[i].Check.Value)
-								v.Transparency = 1 - attacked[i].Check.Opacity
-							end
-						end
+                    pcall(function()
+                        for i, v in Boxes do
+                            v.Adornee = attacked[i] and attacked[i].Entity.RootPart or nil
+                            if v.Adornee then
+                                v.Color3 = Color3.fromHSV(attacked[i].Check.Hue, attacked[i].Check.Sat, attacked[i].Check.Value)
+                                v.Transparency = 1 - attacked[i].Check.Opacity
+                            end
+                        end
 
-						for i, v in Particles do
-							v.Position = attacked[i] and attacked[i].Entity.RootPart.Position or Vector3.new(9e9, 9e9, 9e9)
-							v.Parent = attacked[i] and gameCamera or nil
-						end
-					end)
+                        for i, v in Particles do
+                            v.Position = attacked[i] and attacked[i].Entity.RootPart.Position or Vector3.new(9e9, 9e9, 9e9)
+                            v.Parent = attacked[i] and gameCamera or nil
+                        end
+                    end)
 
-					if Face.Enabled and attacked[1] then
-						local vec = attacked[1].Entity.RootPart.Position * Vector3.new(1, 0, 1)
-						entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
-					end
-					pcall(function() if RangeCirclePart ~= nil then RangeCirclePart.Parent = gameCamera end end)
+                    if Face.Enabled and attacked[1] then
+                        local vec = attacked[1].Entity.RootPart.Position * Vector3.new(1, 0, 1)
+                        entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
+                    end
+                    pcall(function() if RangeCirclePart ~= nil then RangeCirclePart.Parent = gameCamera end end)
 
-					task.wait(1 / UpdateRate.Value)
-				until not Killaura.Enabled
+                    task.wait(1 / UpdateRate.Value)
+                until not Killaura.Enabled
 			else
 				lastTargetTime = 0
 				continueSwingCount = 0
@@ -3292,6 +3303,12 @@ run(function()
         Max = 360,
         Default = 360
     })
+	SwingAngleSlider = Killaura:CreateSlider({
+		Name = 'Swing angle',
+		Min = 1,
+		Max = 360,
+		Default = 360
+	})
     UpdateRate = Killaura:CreateSlider({
         Name = 'Update rate',
         Min = 1,
@@ -3530,6 +3547,10 @@ run(function()
             end
         end,
         Tooltip = 'Only attacks when the sword is held'
+    })
+    LegitAura = Killaura:CreateToggle({
+        Name = 'Swing only',
+        Tooltip = 'Only attacks while swinging manually'
     })
     Killaura:CreateToggle({
         Name = "Sigrid Check",
