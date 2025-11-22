@@ -1,11 +1,23 @@
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 repeat task.wait() until game:IsLoaded()
-if shared.vape then shared.vape:Uninject() end
+if shared.vape then shared.vape:Uninject(); shared.VapeExecuted = false end
 
-if identifyexecutor then
-	if table.find({'Argon', 'Wave'}, ({identifyexecutor()})[1]) then
-		getgenv().setthreadidentity = nil
+if identifyexecutor and ({identifyexecutor()})[1] == 'Argon' then
+	getgenv().setthreadidentity = nil
+end
+
+getgenv().setthreadidentity = function() end
+getgenv().run = function(func)
+	local suc, err = pcall(function() func() end)
+	if (not suc) then
+		warn('Error in module! Error log: '..debug.traceback(tostring(err)))
 	end
 end
+
+local suc, err = pcall(function()
+	return getrenv().require(game:GetService("CoreGui").RobloxGui.Modules.ErrorPrompt)
+end)
+if (not suc) then shared.CheatEngineMode = true end
 
 local vape
 local loadstring = function(...)
