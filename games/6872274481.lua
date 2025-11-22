@@ -1,5 +1,4 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -2872,21 +2871,6 @@ run(function()
 	local function shouldContinueSwinging()
 		if not ContinueSwinging.Enabled then return false end
 		
-		local plrs = entitylib.AllPosition({
-			Range = AttackRange.Value,
-			Wallcheck = Targets.Walls.Enabled or nil,
-			Part = 'RootPart',
-			Players = Targets.Players.Enabled,
-			NPCs = Targets.NPCs.Enabled,
-			Limit = MaxTargets.Value
-		})
-		
-		if #plrs > 0 then
-			lastTargetTime = tick()
-			continueSwingCount = 0
-			return false
-		end
-		
 		if lastTargetTime == 0 then
 			return false
 		end
@@ -2898,7 +2882,6 @@ run(function()
 			return true
 		end
 		
-		continueSwingCount = 0
 		return false
 	end
 
@@ -2989,13 +2972,13 @@ run(function()
                             TweenService:Create(RangeCirclePart, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = entitylib.character.HumanoidRootPart.Position - Vector3.new(0, entitylib.character.Humanoid.HipHeight, 0)}):Play()
                         end
                     end)
-                    local attacked, sword, meta, canAttack = {}, getAttackData()
-                    Attacking = false
-                    store.KillauraTarget = nil
-                    pcall(function() vapeTargetInfo.Targets.Killaura = nil end)
 
-					local shouldSwing = shouldContinueSwinging()
-					if sword and (canAttack or (shouldSwing and lastTargetTime > 0)) then
+					local attacked, sword, meta, canAttack = {}, getAttackData()
+					Attacking = false
+					store.KillauraTarget = nil
+					pcall(function() vapeTargetInfo.Targets.Killaura = nil end)
+
+					if sword and canAttack then
 						if sigridcheck and entitylib.isAlive and lplr.Character:FindFirstChild("elk") then return end
 						local isClaw = string.find(string.lower(tostring(sword and sword.itemType or "")), "summoner_claw")
 						local plrs = entitylib.AllPosition({
@@ -3008,187 +2991,200 @@ run(function()
 							Sort = sortmethods[Sort.Value]
 						})
 						
-						if #plrs > 0 then
-							lastTargetTime = tick()
-							continueSwingCount = 0
-						elseif lastTargetTime == 0 then
-							lastTargetTime = 0
-						end
-						
-						switchItem(sword.tool, 0)
+						local hasValidTargets = false
 						local selfpos = entitylib.character.RootPart.Position
 						local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
-
-						if #plrs > 0 then
-							for _, v in plrs do
-								local delta = (v.RootPart.Position - selfpos)
-								local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
-								local swingAngle = SwingAngleSlider and math.rad(SwingAngleSlider.Value) or math.rad(AngleSlider.Value)
-								if angle > (swingAngle / 2) then continue end
-
-								table.insert(attacked, {
-									Entity = v,
-									Check = delta.Magnitude > AttackRange.Value and BoxSwingColor or BoxAttackColor
-								})
-								targetinfo.Targets[v] = tick() + 1
-								pcall(function()
-									local plr = v
-									vapeTargetInfo.Targets.Killaura = {
-										Humanoid = {
-											Health = (plr.Character:GetAttribute("Health") or plr.Humanoid.Health) + getShieldAttribute(plr.Character),
-											MaxHealth = plr.Character:GetAttribute("MaxHealth") or plr.Humanoid.MaxHealth
-										},
-										Player = plr.Player
-									}
-								end)
-								if not Attacking then
-									Attacking = true
-									store.KillauraTarget = v
-									if not isClaw then
-										if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
-											local swingSpeed = 0.25
-											if SwingTime.Enabled then
-												swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
-											elseif meta.sword.respectAttackSpeedForEffects then
-												swingSpeed = meta.sword.attackSpeed
-											end
-											AnimDelay = tick() + swingSpeed
-											bedwars.SwordController:playSwordEffect(meta, false)
-											if meta.displayName:find(' Scythe') then
-												bedwars.ScytheController:playLocalAnimation()
-											end
-
-											if vape.ThreadFix then
-												setthreadidentity(8)
-											end
-										end
-									end
-								end
-
-								local canHit = delta.Magnitude <= AttackRange.Value
-								local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 5) 
-
-								if not canHit and not extendedRangeCheck then continue end
-
-								if SyncHits.Enabled then
-									local swingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
-									local timeSinceLastSwing = tick() - swingCooldown
-									local requiredDelay = math.max(swingSpeed * 0.8, 0.1) 
-									
-									if timeSinceLastSwing < requiredDelay then 
-										continue 
-									end
-								end
-
-								local actualRoot = v.Character.PrimaryPart
-								if actualRoot then
-									local dir = CFrame.lookAt(selfpos, actualRoot.Position).LookVector
-
-									local pos = selfpos
-									local targetPos = actualRoot.Position
-
-									if not SyncHits.Enabled or (tick() - swingCooldown) >= 0.1 then
-										swingCooldown = tick()
-									end
-									lastSwingServerTimeDelta = workspace:GetServerTimeNow() - lastSwingServerTime
-									lastSwingServerTime = workspace:GetServerTimeNow()
-
-									store.attackReach = (delta.Magnitude * 100) // 1 / 100
-									store.attackReachUpdate = tick() + 1
-
-									if SwingTime.Enabled then
-										lastAttackTime = tick()
-
-										if delta.Magnitude < 14.4 and SwingTimeSlider.Value > 0.11 then
-											AnimDelay = tick()
-										end
-									end
-
-									if isClaw then
-										KaidaController:request(v.Character)
-									else
-										local attackData = {
-											weapon = sword.tool,
-											entityInstance = v.Character,
-											chargedAttack = {chargeRatio = 0},
-											validate = {
-												raycast = {
-													cameraPosition = {value = pos},
-													cursorDirection = {value = dir}
-												},
-												targetPosition = {value = targetPos},
-												selfPosition = {value = pos}
-											}
-										}
-										
-										attackData.validate = attackData.validate or {}
-										attackData.validate.raycast = attackData.validate.raycast or {}
-										attackData.validate.targetPosition = attackData.validate.targetPosition or {value = targetPos}
-										attackData.validate.selfPosition = attackData.validate.selfPosition or {value = pos}
-										
-										attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
-										attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
-										
-										FireAttackRemote(attackData)
-									end
-								end
-							end
-						elseif shouldSwing then
-
-							Attacking = true
-							if not isClaw then
-								if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
-									local swingSpeed = 0.25
-									if SwingTime.Enabled then
-										swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
-									elseif meta.sword.respectAttackSpeedForEffects then
-										swingSpeed = meta.sword.attackSpeed
-									end
-									AnimDelay = tick() + swingSpeed
-									bedwars.SwordController:playSwordEffect(meta, false)
-									if meta.displayName:find(' Scythe') then
-										bedwars.ScytheController:playLocalAnimation()
-									end
-
-									if vape.ThreadFix then
-										setthreadidentity(8)
-									end
-								end
-							end
-
-							local currentSwingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
-							local minSwingDelay = math.max(currentSwingSpeed, 0.05)
+						
+						for _, v in plrs do
+							local delta = (v.RootPart.Position - selfpos)
+							local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
+							local swingAngle = SwingAngleSlider and math.rad(SwingAngleSlider.Value) or math.rad(AngleSlider.Value)
 							
-							if not SyncHits.Enabled or (tick() - swingCooldown) >= minSwingDelay then
-								swingCooldown = tick()
-								
-								local dir = entitylib.character.RootPart.CFrame.LookVector
-								local pos = entitylib.character.RootPart.Position
-								local targetPos = pos + dir * 10
+							if angle <= (swingAngle / 2) then
+								hasValidTargets = true
+								break
+							end
+						end
+						
+						if hasValidTargets then
+							lastTargetTime = tick()
+						end
+						
+						local shouldSwing = hasValidTargets or shouldContinueSwinging()
+						
+						if shouldSwing then
+							switchItem(sword.tool, 0)
+							
+							if hasValidTargets then
+								for _, v in plrs do
+									local delta = (v.RootPart.Position - selfpos)
+									local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
+									local swingAngle = SwingAngleSlider and math.rad(SwingAngleSlider.Value) or math.rad(AngleSlider.Value)
+									if angle > (swingAngle / 2) then continue end
 
-								local attackData = {
-									weapon = sword.tool,
-									entityInstance = entitylib.character,
-									chargedAttack = {chargeRatio = 0},
-									validate = {
-										raycast = {
-											cameraPosition = {value = pos},
-											cursorDirection = {value = dir}
-										},
-										targetPosition = {value = targetPos},
-										selfPosition = {value = pos}
+									table.insert(attacked, {
+										Entity = v,
+										Check = delta.Magnitude > AttackRange.Value and BoxSwingColor or BoxAttackColor
+									})
+									targetinfo.Targets[v] = tick() + 1
+									pcall(function()
+										local plr = v
+										vapeTargetInfo.Targets.Killaura = {
+											Humanoid = {
+												Health = (plr.Character:GetAttribute("Health") or plr.Humanoid.Health) + getShieldAttribute(plr.Character),
+												MaxHealth = plr.Character:GetAttribute("MaxHealth") or plr.Humanoid.MaxHealth
+											},
+											Player = plr.Player
+										}
+									end)
+									if not Attacking then
+										Attacking = true
+										store.KillauraTarget = v
+										if not isClaw then
+											if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
+												local swingSpeed = 0.25
+												if SwingTime.Enabled then
+													swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
+												elseif meta.sword.respectAttackSpeedForEffects then
+													swingSpeed = meta.sword.attackSpeed
+												end
+												AnimDelay = tick() + swingSpeed
+												bedwars.SwordController:playSwordEffect(meta, false)
+												if meta.displayName:find(' Scythe') then
+													bedwars.ScytheController:playLocalAnimation()
+												end
+
+												if vape.ThreadFix then
+													setthreadidentity(8)
+												end
+											end
+										end
+									end
+
+									local canHit = delta.Magnitude <= AttackRange.Value
+									local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 5) 
+
+									if not canHit and not extendedRangeCheck then continue end
+
+									if SyncHits.Enabled then
+										local swingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
+										local timeSinceLastSwing = tick() - swingCooldown
+										local requiredDelay = math.max(swingSpeed * 0.8, 0.1) 
+										
+										if timeSinceLastSwing < requiredDelay then 
+											continue 
+										end
+									end
+
+									local actualRoot = v.Character.PrimaryPart
+									if actualRoot then
+										local dir = CFrame.lookAt(selfpos, actualRoot.Position).LookVector
+
+										local pos = selfpos
+										local targetPos = actualRoot.Position
+
+										if not SyncHits.Enabled or (tick() - swingCooldown) >= 0.1 then
+											swingCooldown = tick()
+										end
+										lastSwingServerTimeDelta = workspace:GetServerTimeNow() - lastSwingServerTime
+										lastSwingServerTime = workspace:GetServerTimeNow()
+
+										store.attackReach = (delta.Magnitude * 100) // 1 / 100
+										store.attackReachUpdate = tick() + 1
+
+										if SwingTime.Enabled then
+											lastAttackTime = tick()
+
+											if delta.Magnitude < 14.4 and SwingTimeSlider.Value > 0.11 then
+												AnimDelay = tick()
+											end
+										end
+
+										if isClaw then
+											KaidaController:request(v.Character)
+										else
+											local attackData = {
+												weapon = sword.tool,
+												entityInstance = v.Character,
+												chargedAttack = {chargeRatio = 0},
+												validate = {
+													raycast = {
+														cameraPosition = {value = pos},
+														cursorDirection = {value = dir}
+													},
+													targetPosition = {value = targetPos},
+													selfPosition = {value = pos}
+												}
+											}
+											
+											attackData.validate = attackData.validate or {}
+											attackData.validate.raycast = attackData.validate.raycast or {}
+											attackData.validate.targetPosition = attackData.validate.targetPosition or {value = targetPos}
+											attackData.validate.selfPosition = attackData.validate.selfPosition or {value = pos}
+											
+											attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
+											attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
+											
+											FireAttackRemote(attackData)
+										end
+									end
+								end
+							else
+								Attacking = true
+								if not isClaw then
+									if not Swing.Enabled and AnimDelay <= tick() and not LegitAura.Enabled then
+										local swingSpeed = 0.25
+										if SwingTime.Enabled then
+											swingSpeed = math.max(SwingTimeSlider.Value, 0.11)
+										elseif meta.sword.respectAttackSpeedForEffects then
+											swingSpeed = meta.sword.attackSpeed
+										end
+										AnimDelay = tick() + swingSpeed
+										bedwars.SwordController:playSwordEffect(meta, false)
+										if meta.displayName:find(' Scythe') then
+											bedwars.ScytheController:playLocalAnimation()
+										end
+
+										if vape.ThreadFix then
+											setthreadidentity(8)
+										end
+									end
+								end
+
+								local currentSwingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
+								local minSwingDelay = math.max(currentSwingSpeed, 0.05)
+								
+								if not SyncHits.Enabled or (tick() - swingCooldown) >= minSwingDelay then
+									swingCooldown = tick()
+									
+									local dir = entitylib.character.RootPart.CFrame.LookVector
+									local pos = entitylib.character.RootPart.Position
+									local targetPos = pos + dir * 10
+
+									local attackData = {
+										weapon = sword.tool,
+										entityInstance = entitylib.character.Character,
+										chargedAttack = {chargeRatio = 0},
+										validate = {
+											raycast = {
+												cameraPosition = {value = pos},
+												cursorDirection = {value = dir}
+											},
+											targetPosition = {value = targetPos},
+											selfPosition = {value = pos}
+										}
 									}
-								}
-								
-								attackData.validate = attackData.validate or {}
-								attackData.validate.raycast = attackData.validate.raycast or {}
-								attackData.validate.targetPosition = attackData.validate.targetPosition or {value = targetPos}
-								attackData.validate.selfPosition = attackData.validate.selfPosition or {value = pos}
-								
-								attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
-								attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
-								
-								FireAttackRemote(attackData)
+									
+									attackData.validate = attackData.validate or {}
+									attackData.validate.raycast = attackData.validate.raycast or {}
+									attackData.validate.targetPosition = attackData.validate.targetPosition or {value = targetPos}
+									attackData.validate.selfPosition = attackData.validate.selfPosition or {value = pos}
+									
+									attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
+									attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
+									
+									FireAttackRemote(attackData)
+								end
 							end
 						end
 					end
