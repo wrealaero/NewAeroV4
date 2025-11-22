@@ -107,8 +107,8 @@ getgenv().ExunysDeveloperAimbot = {
 		LockMode = 1, -- 1 = CFrame; 2 = mousemoverel
 		LockPart = "Head", -- Body part to lock on
 
-		TriggerKey = Enum.KeyCode.G, -- Changed to G key
-		Toggle = true -- Changed to true for toggle mode
+		TriggerKey = Enum.UserInputType.MouseButton2, -- Changed to Right Mouse Button
+		Toggle = false -- Changed to false for hold mode
 	},
 
 	FOVSettings = {
@@ -297,7 +297,7 @@ local Load = function()
 			return
 		end
 
-		if Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == TriggerKey then
+		if Input.UserInputType == TriggerKey then
 			if Toggle then
 				Running = not Running
 
@@ -307,6 +307,8 @@ local Load = function()
 			else
 				Running = true
 			end
+			
+			print("Aimbot activated! Holding right click...")
 		end
 	end)
 
@@ -317,9 +319,10 @@ local Load = function()
 			return
 		end
 
-		if Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == TriggerKey then
+		if Input.UserInputType == TriggerKey then
 			Running = false
 			CancelLock()
+			print("Aimbot deactivated! Released right click.")
 		end
 	end)
 end
@@ -400,4 +403,4 @@ setmetatable(Environment, {__call = Load})
 Environment:Load()
 
 -- Optional: Print confirmation message
-print("Aimbot loaded! Press G to toggle on/off")
+print("Aimbot loaded! Hold right click to activate")
