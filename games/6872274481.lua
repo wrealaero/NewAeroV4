@@ -1,4 +1,5 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
 	func()
 end
@@ -3109,14 +3110,13 @@ run(function()
 												chargedAttack = {chargeRatio = 0},
 												validate = {
 													raycast = {
-														cameraPosition = {value = pos + Vector3.new(0, 2, 0)}, -
+														cameraPosition = {value = pos + Vector3.new(0, 2, 0)},
 														cursorDirection = {value = dir}
 													},
 													targetPosition = {value = targetPos},
-													selfPosition = {value = pos + Vector3.new(0, 1, 0)} 
+													selfPosition = {value = pos + Vector3.new(0, 1, 0)}
 												}
 											}
-
 											
 											attackData.validate = attackData.validate or {}
 											attackData.validate.raycast = attackData.validate.raycast or {}
