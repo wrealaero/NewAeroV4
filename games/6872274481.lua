@@ -3063,7 +3063,7 @@ run(function()
 									end
 
 									local canHit = delta.Magnitude <= AttackRange.Value
-									local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 999) 
+									local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 5) 
 
 									if not canHit and not extendedRangeCheck then continue end
 
@@ -3110,11 +3110,11 @@ run(function()
 												chargedAttack = {chargeRatio = 0},
 												validate = {
 													raycast = {
-														cameraPosition = {value = pos + Vector3.new(0, 2, 0)},
+														cameraPosition = {value = pos},
 														cursorDirection = {value = dir}
 													},
 													targetPosition = {value = targetPos},
-													selfPosition = {value = pos + Vector3.new(0, 1, 0)}
+													selfPosition = {value = pos}
 												}
 											}
 											
