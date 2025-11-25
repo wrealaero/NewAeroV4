@@ -1526,8 +1526,12 @@ run(function()
 				else
 					currentCPS = CPS 
 				end
-	
-				task.wait(1 / currentCPS.GetRandomValue())
+
+				local minCPS = currentCPS.Min
+				local maxCPS = currentCPS.Max
+				local randomCPS = math.random(minCPS, maxCPS)
+				
+				task.wait(1 / randomCPS)
 			until not AutoClicker.Enabled
 		end)
 	end
