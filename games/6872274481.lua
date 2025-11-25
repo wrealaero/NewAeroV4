@@ -2822,39 +2822,43 @@ run(function()
         end
     end
 
-    local function getAttackData()
-        if Mouse.Enabled then
-            if not inputService:IsMouseButtonPressed(0) then return false end
-        end
+	local function getAttackData()
+		if Mouse.Enabled then
+			local mousePressed = inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+			if not mousePressed then 
+				return false 
+			end
+		end
 
-        if GUI.Enabled then
-            if bedwars.AppController:isLayerOpen(bedwars.UILayers.MAIN) then return false end
-        end
+		if GUI.Enabled then
+			if bedwars.AppController:isLayerOpen(bedwars.UILayers.MAIN) then return false end
+		end
 
-        local sword = Limit.Enabled and store.hand or store.tools.sword
-        if not sword or not sword.tool then return false end
+		local sword = Limit.Enabled and store.hand or store.tools.sword
+		if not sword or not sword.tool then return false end
 
-        local meta = bedwars.ItemMeta[sword.tool.Name]
-        if Limit.Enabled then
-            if store.hand.toolType ~= 'sword' or bedwars.DaoController.chargingMaid then return false end
-        end
+		local meta = bedwars.ItemMeta[sword.tool.Name]
+		if Limit.Enabled then
+			if store.hand.toolType ~= 'sword' or bedwars.DaoController.chargingMaid then return false end
+		end
 
-        if LegitAura.Enabled then
-            local isSwinging = inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-            local timeSinceLastSwing = workspace:GetServerTimeNow() - bedwars.SwordController.lastAttack
-            local recentlySwung = timeSinceLastSwing < 0.3
-            if not isSwinging and not recentlySwung then
-                return false
-            end
-        end
+		if LegitAura.Enabled then
+			local isSwinging = inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+			local timeSinceLastSwing = workspace:GetServerTimeNow() - (bedwars.SwordController.lastSwing or 0)
+			local recentlySwung = timeSinceLastSwing < 0.3
+			
+			if not isSwinging and not recentlySwung then
+				return false
+			end
+		end
 
-        if SwingTime.Enabled then
-            local swingSpeed = SwingTimeSlider.Value
-            return sword, meta, (tick() - lastAttackTime) >= swingSpeed
-        else
-            return sword, meta, true
-        end
-    end
+		if SwingTime.Enabled then
+			local swingSpeed = SwingTimeSlider.Value
+			return sword, meta, (tick() - lastAttackTime) >= swingSpeed
+		else
+			return sword, meta, true
+		end
+	end
 	
 	local function resetSwordCooldown()
 		if bedwars.SwordController then
