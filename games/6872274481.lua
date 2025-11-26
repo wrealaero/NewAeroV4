@@ -2844,10 +2844,11 @@ run(function()
 
 		if LegitAura.Enabled then
 			local isSwinging = inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-			local timeSinceLastSwing = workspace:GetServerTimeNow() - (bedwars.SwordController.lastSwing or 0)
-			local recentlySwung = timeSinceLastSwing < 0.3
 			
-			if not isSwinging and not recentlySwung then
+			local timeSinceLastSwing = workspace:GetServerTimeNow() - (bedwars.SwordController.lastSwing or 0)
+			local swingCooldownTime = meta.sword.attackSpeed or 0.42
+			
+			if not isSwinging and timeSinceLastSwing > (swingCooldownTime * 1.2) then
 				return false
 			end
 		end
@@ -3073,6 +3074,9 @@ run(function()
 
 									if SyncHits.Enabled then
 										local swingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
+										if (tick() - swingCooldown) < (swingSpeed * 0.7) then 
+											continue 
+										end
 										local timeSinceLastSwing = tick() - swingCooldown
 										local requiredDelay = math.max(swingSpeed * 0.8, 0.1) 
 										
