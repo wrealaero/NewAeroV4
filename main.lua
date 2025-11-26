@@ -7,6 +7,72 @@ if identifyexecutor then
 	end
 end
 
+local function validateSecurity()
+    local HttpService = game:GetService("HttpService")
+    
+    if not isfile('newvape/security/validated') then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Security Error",
+            Text = "No validation file found. Access denied.",
+            Duration = 5
+        })
+        return false, nil
+    end
+    
+    local validationContent = readfile('newvape/security/validated')
+    local success, validationData = pcall(function()
+        return HttpService:JSONDecode(validationContent)
+    end)
+    
+    if not success or not validationData then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Security Error",
+            Text = "Corrupted validation file. Access denied.",
+            Duration = 5
+        })
+        return false, nil
+    end
+    
+    if not validationData.username or not validationData.repo_owner or not validationData.repo_name or not validationData.validated then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Security Error",
+            Text = "Invalid validation data. Access denied.",
+            Duration = 5
+        })
+        return false, nil
+    end
+    
+    if not isfile('newvape/security/'..validationData.username) then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Security Error",
+            Text = "User validation missing. Access denied.",
+            Duration = 5
+        })
+        return false, nil
+    end
+    
+    local EXPECTED_REPO_OWNER = "wrealaero"
+    local EXPECTED_REPO_NAME = "NewAeroV4"
+    
+    if validationData.repo_owner ~= EXPECTED_REPO_OWNER or validationData.repo_name ~= EXPECTED_REPO_NAME then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Security Error",
+            Text = "Unauthorized repository detected. Access denied.",
+            Duration = 5
+        })
+        return false, nil
+    end
+    
+    return true, validationData.username
+end
+
+local securityPassed, validatedUsername = validateSecurity()
+if not securityPassed then
+    return
+end
+
+shared.ValidatedUsername = validatedUsername
+
 local vape
 local loadstring = function(...)
 	local res, err = loadstring(...)
@@ -79,7 +145,7 @@ local function finishLoading()
 	if not shared.vapereload then
 		if not vape.Categories then return end
 		if vape.Categories.Main.Options['GUI bind indicator'].Enabled then
-			vape:CreateNotification('Finished Loading', vape.VapeButton and 'Press the button in the top right to open GUI' or 'Press '..table.concat(vape.Keybind, ' + '):upper()..' to open GUI', 5)
+			vape:CreateNotification('Finished Loading', 'Welcome, '..shared.ValidatedUsername..'! '..(vape.VapeButton and 'Press the button in the top right to open GUI' or 'Press '..table.concat(vape.Keybind, ' + '):upper()..' to open GUI'), 5)
 		end
 	end
 end
