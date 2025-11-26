@@ -2657,7 +2657,8 @@ run(function()
 		Tooltip = 'Lets you sprint with a speed potion.'
 	})
 end)
-	
+
+-- aero killaura 
 local Attacking
 run(function()
     local Killaura
@@ -3066,7 +3067,7 @@ run(function()
 									end
 
 									local canHit = delta.Magnitude <= AttackRange.Value
-									local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 5) 
+									local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 3) 
 
 									if not canHit and not extendedRangeCheck then continue end
 
@@ -3113,11 +3114,11 @@ run(function()
 												chargedAttack = {chargeRatio = 0},
 												validate = {
 													raycast = {
-														cameraPosition = {value = pos},
+														cameraPosition = {value = pos + Vector3.new(0, 2, 0)},
 														cursorDirection = {value = dir}
 													},
 													targetPosition = {value = targetPos},
-													selfPosition = {value = pos}
+													selfPosition = {value = pos + Vector3.new(0, 1, 0)}
 												}
 											}
 											
@@ -3561,6 +3562,7 @@ run(function()
     })
 end)
 
+-- 7granddadpgn killaura
 local Attacking
 run(function()
 	local Killaura
