@@ -1,4 +1,52 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+
+local function validateSecurity()
+    local HttpService = game:GetService("HttpService")
+    
+    if not isfile('newvape/security/validated') then
+        return false, "could not find yo validation file.."
+    end
+    
+    local validationContent = readfile('newvape/security/validated')
+    local success, validationData = pcall(function()
+        return HttpService:JSONDecode(validationContent)
+    end)
+    
+    if not success or not validationData then
+        return false, "your validation file is courrupted, delete it and inject again.."
+    end
+    
+    if not validationData.username or not validationData.repo_owner or not validationData.repo_name or not validationData.validated then
+        return false, "wrong validation data"
+    end
+    
+    if not isfile('newvape/security/'..validationData.username) then
+        return false, "your user validation is missing"
+    end
+    
+    if validationData.repo_owner ~= "wrealaero" or validationData.repo_name ~= "NewAeroV4" then
+        return false, "wrong laodstring (repo)"
+    end
+    
+    return true, validationData.username
+end
+
+local securityPassed, result = validateSecurity()
+if not securityPassed then
+    if vape then
+        vape:CreateNotification('Security Error', result..'. Access denied.', 10, 'alert')
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "nice try",
+            Text = result..". Access denied. if yk ur ment to sue it dm aero",
+            Duration = 5
+        })
+    end
+    return
+end
+
+shared.ValidatedUsername = result
+
 local run = function(func)
 	func()
 end
@@ -10357,6 +10405,97 @@ run(function()
 			end
 		end
 	})
+end)
+
+run(function()
+    local BuyBlocksModule
+    local GUICheck
+    local DelaySlider
+    local running = false
+
+    local function getShopNPC()
+        local shopFound = false
+        if entitylib.isAlive then
+            local localPosition = entitylib.character.RootPart.Position
+            for _, v in store.shop do
+                if (v.RootPart.Position - localPosition).Magnitude <= 20 then
+                    shopFound = true
+                    break
+                end
+            end
+        end
+        return shopFound
+    end
+
+    BuyBlocksModule = vape.Categories.Inventory:CreateModule({
+        Name = "BuyBlocks",
+        Function = function(enabled)
+            running = enabled
+
+            if enabled then
+                task.spawn(function()
+                    while running do
+                        local canBuy = true
+                        
+                        if GUICheck.Enabled then
+                            if bedwars.AppController:isAppOpen('BedwarsItemShopApp') then
+                                canBuy = true
+                            else
+                                canBuy = false
+                            end
+                        else
+                            canBuy = getShopNPC()
+                        end
+
+                        if canBuy then
+                            local args = {
+                                {
+                                    shopItem = {
+                                        currency = "iron",
+                                        itemType = "wool_white",
+                                        amount = 16,
+                                        price = 8,
+                                        category = "Blocks"
+                                    },
+                                    shopId = "2_item_shop_1"
+                                }
+                            }
+
+                            pcall(function()
+                                game:GetService("ReplicatedStorage")
+                                :WaitForChild("rbxts_include")
+                                :WaitForChild("node_modules")
+                                :WaitForChild("@rbxts")
+                                :WaitForChild("net")
+                                :WaitForChild("out")
+                                :WaitForChild("_NetManaged")
+                                :WaitForChild("BedwarsPurchaseItem")
+                                :InvokeServer(unpack(args))
+                            end)
+                        end
+
+                        task.wait(DelaySlider.Value)
+                    end
+                end)
+            end
+        end,
+        Tooltip = "Automatically buys wool blocks"
+    })
+
+    GUICheck = BuyBlocksModule:CreateToggle({
+        Name = "GUI Check",
+        Tooltip = "Only buy when shop GUI is open",
+        Default = false
+    })
+
+    DelaySlider = BuyBlocksModule:CreateSlider({
+        Name = "Delay",
+        Min = 0.1,
+        Max = 2,
+        Default = 0.1,
+        Decimal = 10,
+        Tooltip = "Delay between purchases (seconds)"
+    })
 end)
 	
 run(function()
