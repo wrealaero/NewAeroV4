@@ -5068,6 +5068,11 @@ run(function()
 		end)
 	end
 	
+	local function hasArrows()
+		local arrowItem = getItem('arrow')
+		return arrowItem and arrowItem.amount > 0
+	end
+	
 	local function getBows()
 		local bows = {}
 		for i, v in store.inventory.hotbar do
@@ -5147,6 +5152,10 @@ run(function()
 					local source, data, proj = ...
 					if source and proj and (proj == 'arrow' or bedwars.ProjectileMeta[proj] and bedwars.ProjectileMeta[proj].combat) and not _G.autoShootLock then
 						task.spawn(function()
+							if not hasArrows() then
+								return
+							end
+							
 							if FirstPersonCheck.Enabled and not isFirstPerson() then
 								return
 							end
@@ -5185,6 +5194,10 @@ run(function()
 					repeat
 						task.wait(0.1)
 						if autoShootEnabled and not _G.autoShootLock then
+							if not hasArrows() then
+								continue
+							end
+							
 							if FirstPersonCheck.Enabled and not isFirstPerson() then
 								continue
 							end
@@ -5325,6 +5338,11 @@ run(function()
 		end)
 	end
 	
+	local function hasGloop()
+		local gloopItem = getItem('glue_projectile')
+		return gloopItem and gloopItem.amount > 0
+	end
+	
 	local function getGloopSlots()
 		local gloops = {}
 		for i, v in store.inventory.hotbar do
@@ -5405,6 +5423,10 @@ run(function()
 					repeat
 						task.wait(0.1)
 						if autoGloopEnabled and not _G.autoShootLock then
+							if not hasGloop() then
+								continue
+							end
+							
 							if FirstPersonCheck.Enabled and not isFirstPerson() then
 								continue
 							end
@@ -5514,212 +5536,6 @@ run(function()
 	})
 	
 	FirstPersonCheck = AutoGloop:CreateToggle({
-		Name = 'First Person Only',
-		Default = false,
-		Tooltip = 'Only works in first person mode'
-	})
-end)
-
-run(function()
-	local AutoFireballInterval
-	local AutoFireballSwitchSpeed
-	local AutoFireballWaitDelay
-	local AutoFireballRange
-	local AutoFireballFOV
-	local lastAutoFireballTime = 0
-	local autoFireballEnabled = false
-	local FireballKillauraTargetCheck
-	local FirstPersonCheck
-	
-	local VirtualInputManager = game:GetService("VirtualInputManager")
-	
-	local function leftClick()
-		pcall(function()
-			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-			task.wait(0.05)
-			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-		end)
-	end
-	
-	local function getFireballSlots()
-		local fireballs = {}
-		for i, v in store.inventory.hotbar do
-			if v.item and v.item.itemType then
-				if v.item.itemType == 'fireball' then
-					table.insert(fireballs, i - 1)
-				end
-			end
-		end
-		return fireballs
-	end
-	
-	local function getSwordSlot()
-		for i, v in store.inventory.hotbar do
-			if v.item and bedwars.ItemMeta[v.item.itemType] then
-				local meta = bedwars.ItemMeta[v.item.itemType]
-				if meta.sword then
-					return i - 1
-				end
-			end
-		end
-		return nil
-	end
-	
-	local function hasValidTarget()
-		if FireballKillauraTargetCheck.Enabled then
-			return store.KillauraTarget ~= nil
-		else
-			if not entitylib.isAlive then return false end
-			
-			local myPos = entitylib.character.RootPart.Position
-			local myLook = entitylib.character.RootPart.CFrame.LookVector
-			
-			for _, entity in entitylib.List do
-				if entity.Player == lplr then continue end
-				if not entity.Character then continue end
-				if not entity.RootPart then continue end
-				
-				if entity.Player then
-					if lplr:GetAttribute('Team') == entity.Player:GetAttribute('Team') then
-						continue
-					end
-				else
-					if not entity.Targetable then
-						continue
-					end
-				end
-				
-				local distance = (entity.RootPart.Position - myPos).Magnitude
-				if distance > AutoFireballRange.Value then continue end
-				
-				local toTarget = (entity.RootPart.Position - myPos).Unit
-				local dot = myLook:Dot(toTarget)
-				local angle = math.acos(dot)
-				local fovRad = math.rad(AutoFireballFOV.Value)
-				
-				if angle <= fovRad then
-					return true
-				end
-			end
-			
-			return false
-		end
-	end
-	
-	local AutoFireball = vape.Categories.Utility:CreateModule({
-		Name = 'AutoFireball',
-		Function = function(callback)
-			if callback then
-				autoFireballEnabled = true
-				
-				task.spawn(function()
-					repeat
-						task.wait(0.1)
-						if autoFireballEnabled and not _G.autoShootLock then
-							if FirstPersonCheck.Enabled and not isFirstPerson() then
-								continue
-							end
-							
-							if not hasValidTarget() then
-								continue
-							end
-							
-							local currentTime = tick()
-							if (currentTime - lastAutoFireballTime) >= AutoFireballInterval.Value then
-								local fireballs = getFireballSlots()
-								local swordSlot = getSwordSlot()
-								
-								if #fireballs > 0 then
-									_G.autoShootLock = true
-									lastAutoFireballTime = currentTime
-									local originalSlot = store.inventory.hotbarSlot
-									
-									for _, fireballSlot in fireballs do
-										if hotbarSwitch(fireballSlot) then
-											task.wait(AutoFireballSwitchSpeed.Value)
-											task.wait(AutoFireballWaitDelay.Value)
-											leftClick()
-											task.wait(0.05)
-										end
-									end
-									
-									if swordSlot then
-										hotbarSwitch(swordSlot)
-									else
-										hotbarSwitch(originalSlot)
-									end
-									
-									_G.autoShootLock = false
-								end
-							end
-						end
-					until not autoFireballEnabled
-				end)
-			else
-				autoFireballEnabled = false
-			end
-		end,
-		Tooltip = 'Automatically throws fireballs at enemies'
-	})
-	
-	AutoFireballInterval = AutoFireball:CreateSlider({
-		Name = 'Throw Interval',
-		Min = 0.1,
-		Max = 3,
-		Default = 0.8,
-		Decimal = 10,
-		Suffix = function(val)
-			return val == 1 and 'second' or 'seconds'
-		end,
-		Tooltip = 'How often to throw fireballs'
-	})
-	
-	AutoFireballSwitchSpeed = AutoFireball:CreateSlider({
-		Name = 'Switch Delay',
-		Min = 0,
-		Max = 0.2,
-		Default = 0.05,
-		Decimal = 100,
-		Suffix = 's',
-		Tooltip = 'Delay between switching and throwing (lower = faster)'
-	})
-	
-	AutoFireballWaitDelay = AutoFireball:CreateSlider({
-		Name = 'Wait Delay',
-		Min = 0,
-		Max = 1,
-		Default = 0,
-		Decimal = 100,
-		Suffix = 's',
-		Tooltip = 'Delay before throwing (helps prevent ghosting)'
-	})
-	
-	AutoFireballRange = AutoFireball:CreateSlider({
-		Name = 'Range',
-		Min = 1,
-		Max = 30,
-		Default = 15,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
-		end,
-		Tooltip = 'Maximum range to throw fireballs'
-	})
-	
-	AutoFireballFOV = AutoFireball:CreateSlider({
-		Name = 'FOV',
-		Min = 1,
-		Max = 180,
-		Default = 90,
-		Tooltip = 'Field of view for target detection (1-180 degrees)'
-	})
-	
-	FireballKillauraTargetCheck = AutoFireball:CreateToggle({
-		Name = 'Require Killaura Target',
-		Default = false,
-		Tooltip = 'Only throw fireballs when Killaura has a target'
-	})
-	
-	FirstPersonCheck = AutoFireball:CreateToggle({
 		Name = 'First Person Only',
 		Default = false,
 		Tooltip = 'Only works in first person mode'
