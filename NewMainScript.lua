@@ -23,46 +23,6 @@ local ACCOUNT_SYSTEM_URL = decodeBase64("aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQ
 local HttpService = game:GetService("HttpService")
 local StarterGui = game.StarterGui
 
-local function getHardwareId()
-    local hardwareInfo = ""
-    
-    if syn and syn.crypt then
-        hardwareInfo = syn.crypt.hash(syn.crypt.random(16))
-    elseif getexecutorname then
-        hardwareInfo = getexecutorname() .. tostring(os.clock())
-    else
-        hardwareInfo = game:GetService("RbxAnalyticsService"):GetClientId() .. tostring(tick())
-    end
-    
-    local hash = ""
-    for i = 1, 32 do
-        local byte = string.byte(hardwareInfo, (i % #hardwareInfo) + 1)
-        hash = hash .. string.format("%02x", byte)
-    end
-    
-    return hash:sub(1, 16)
-end
-
-local function createValidationFile(username, repoInfo, hardwareId)
-    if not isfolder('newvape/security') then
-        makefolder('newvape/security')
-    end
-    
-    local validationData = {
-        username = username,
-        timestamp = os.time(),
-        repo_owner = repoInfo.owner,
-        repo_name = repoInfo.name,
-        validated = true,
-        hardware_id = hardwareId,
-        checksum = HttpService:GenerateGUID(false)
-    }
-    
-    local encoded = HttpService:JSONEncode(validationData)
-    writefile('newvape/security/validated', encoded)
-    writefile('newvape/security/'..username, tostring(os.time()))
-end
-
 local function fetchAccounts()
     local success, response = pcall(game.HttpGet, game, ACCOUNT_SYSTEM_URL)
     if success and response then
@@ -72,14 +32,6 @@ local function fetchAccounts()
         end
     end
     return nil
-end
-
-local function getRepoInfo()
-    return {
-        owner = EXPECTED_REPO_OWNER,
-        name = EXPECTED_REPO_NAME,
-        url = 'https://github.com/'..EXPECTED_REPO_OWNER..'/'..EXPECTED_REPO_NAME
-    }
 end
 
 local function SecurityCheck(loginData)
@@ -114,50 +66,22 @@ local function SecurityCheck(loginData)
         return false
     end
     
-    local currentHardwareId = getHardwareId()
-    local matchedAccount = nil
-    
     for _, account in pairs(accounts) do
         if account.Username == inputUsername and account.Password == inputPassword then
-            matchedAccount = account
-            break
+            return true
         end
     end
     
-    if not matchedAccount then
-        StarterGui:SetCore("SendNotification", {
-            Title = "Access Denied",
-            Text = "wrong info dm 5qvx for access",
-            Duration = 3
-        })
-        return false
-    end
-    
-    if matchedAccount.IsActive == false then
-        StarterGui:SetCore("SendNotification", {
-            Title = "Account Suspended",
-            Text = "your account has been suspended. dm aero",
-            Duration = 3
-        })
-        return false
-    end
-    
-    if matchedAccount.HardwareId and matchedAccount.HardwareId ~= "" then
-        if matchedAccount.HardwareId ~= currentHardwareId then
-            StarterGui:SetCore("SendNotification", {
-                Title = "Security Alert",
-                Text = "account is being used on different device. dm aero",
-                Duration = 3
-            })
-            return false
-        end
-    end
-    
-    createValidationFile(inputUsername, getRepoInfo(), currentHardwareId)
-    return true
+    StarterGui:SetCore("SendNotification", {
+        Title = "Access Denied",
+        Text = "wrong info dm 5qvx for access",
+        Duration = 3
+    })
+    return false
 end
 
 local passedArgs = ... or {}
+
 if not SecurityCheck(passedArgs) then
     return
 end
