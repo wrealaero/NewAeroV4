@@ -142,13 +142,11 @@ local function SecurityCheck(loginData)
         return false
     end
     
-    if not matchedAccount.HardwareId then
-        matchedAccount.HardwareId = inputUsername:lower() .. "-" .. currentHardwareId
-    end
-    
-    if matchedAccount.HardwareId ~= currentHardwareId then
+    if matchedAccount.HardwareId == "" or matchedAccount.HardwareId == nil then
+        matchedAccount.HardwareId = currentHardwareId
+    elseif matchedAccount.HardwareId ~= currentHardwareId then
         StarterGui:SetCore("SendNotification", {
-            Title = "Security Alert",
+            Title = "Security Alert", 
             Text = "account is being used on different device. dm aero",
             Duration = 3
         })
