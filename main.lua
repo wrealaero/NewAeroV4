@@ -57,80 +57,6 @@ local function fetchAccounts()
     return nil
 end
 
-local function showGlobalAnnouncement()
-    local announcementEnabled = false
-    local announcementText = "Happy Thanksgiving! Go outside and spend time with family instead of cheating."
-    local announcementDuration = 20
-    
-    if not announcementEnabled then
-        return false
-    end
-    
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "GlobalAnnouncement"
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.Parent = game:GetService("CoreGui")
-    
-    local messageFrame = Instance.new("Frame")
-    messageFrame.Size = UDim2.new(0.6, 0, 0.3, 0)
-    messageFrame.Position = UDim2.new(0.2, 0, 0.35, 0)
-    messageFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-    messageFrame.BorderSizePixel = 0
-    messageFrame.Parent = screenGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = messageFrame
-    
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.new(1, 0.5, 0)
-    stroke.Thickness = 3
-    stroke.Parent = messageFrame
-    
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0.3, 0)
-    title.Position = UDim2.new(0, 0, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "ANNOUNCEMENT FROM AERO"
-    title.TextColor3 = Color3.new(1, 0.5, 0)
-    title.TextScaled = true
-    title.Font = Enum.Font.GothamBold
-    title.Parent = messageFrame
-    
-    local message = Instance.new("TextLabel")
-    message.Size = UDim2.new(0.9, 0, 0.5, 0)
-    message.Position = UDim2.new(0.05, 0, 0.3, 0)
-    message.BackgroundTransparency = 1
-    message.Text = announcementText
-    message.TextColor3 = Color3.new(1, 1, 1)
-    message.TextScaled = true
-    message.Font = Enum.Font.Gotham
-    message.TextWrapped = true
-    message.Parent = messageFrame
-    
-    local countdown = Instance.new("TextLabel")
-    countdown.Size = UDim2.new(1, 0, 0.2, 0)
-    countdown.Position = UDim2.new(0, 0, 0.8, 0)
-    countdown.BackgroundTransparency = 1
-    countdown.Text = "Script will not load - Closing in " .. announcementDuration .. " seconds"
-    countdown.TextColor3 = Color3.new(0.7, 0.7, 0.7)
-    countdown.TextScaled = true
-    countdown.Font = Enum.Font.Gotham
-    countdown.Parent = messageFrame
-    
-    task.spawn(function()
-        local timeLeft = announcementDuration
-        while timeLeft > 0 do
-            countdown.Text = "Script will not load - Closing in " .. timeLeft .. " seconds"
-            task.wait(1)
-            timeLeft = timeLeft - 1
-        end
-        screenGui:Destroy()
-    end)
-    
-    return true
-end
-
 local function setupSuspensionCheck(username)
     local checkInterval = 30
     
@@ -242,11 +168,6 @@ end
 
 local securityPassed, validatedUsername = validateSecurity()
 if not securityPassed then
-    return
-end
-
-local announcementShown = showGlobalAnnouncement()
-if announcementShown then
     return
 end
 
