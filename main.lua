@@ -58,7 +58,7 @@ local function fetchAccounts()
 end
 
 local function showGlobalAnnouncement()
-    local announcementEnabled = true
+    local announcementEnabled = false
     local announcementText = "Happy Thanksgiving! Go outside and spend time with family instead of cheating."
     local announcementDuration = 10
     
