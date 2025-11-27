@@ -1,4 +1,50 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+
+local function validateSecurity()
+    local HttpService = game:GetService("HttpService")
+    
+    if not isfile('newvape/security/validated') then
+        return false, "could not find yo validation file.."
+    end
+    
+    local validationContent = readfile('newvape/security/validated')
+    local success, validationData = pcall(HttpService.JSONDecode, HttpService, validationContent)
+    
+    if not success or not validationData then
+        return false, "your validation file is courrupted, delete it and inject again.."
+    end
+    
+    if not (validationData.username and validationData.repo_owner and validationData.repo_name and validationData.validated) then
+        return false, "wrong validation data"
+    end
+    
+    if not isfile('newvape/security/'..validationData.username) then
+        return false, "your user validation is missing"
+    end
+    
+    if validationData.repo_owner ~= "wrealaero" or validationData.repo_name ~= "NewAeroV4" then
+        return false, "wrong loadstring (repo)"
+    end
+    
+    return true, validationData.username
+end
+
+local securityPassed, result = validateSecurity()
+if not securityPassed then
+    if vape then
+        vape:CreateNotification('Security Error', result..'. Access denied.', 10, 'alert')
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "nice try",
+            Text = result..". Access denied. if yk ur ment to sue it dm aero",
+            Duration = 5
+        })
+    end
+    return
+end
+
+shared.ValidatedUsername = result
+
 local run = function(func)
 	func()
 end
