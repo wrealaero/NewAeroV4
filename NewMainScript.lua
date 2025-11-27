@@ -133,4 +133,94 @@ local function SecurityCheck(loginData)
         return false
     end
     
-    if matchedAccount.IsActive
+    if matchedAccount.IsActive == false then
+        StarterGui:SetCore("SendNotification", {
+            Title = "Account Suspended",
+            Text = "your account has been suspended. dm aero",
+            Duration = 3
+        })
+        return false
+    end
+    
+    if matchedAccount.HardwareId and matchedAccount.HardwareId ~= "" then
+        if matchedAccount.HardwareId ~= currentHardwareId then
+            StarterGui:SetCore("SendNotification", {
+                Title = "Security Alert",
+                Text = "account is being used on different device. dm aero",
+                Duration = 3
+            })
+            return false
+        end
+    end
+    
+    createValidationFile(inputUsername, getRepoInfo(), currentHardwareId)
+    return true
+end
+
+local passedArgs = ... or {}
+if not SecurityCheck(passedArgs) then
+    return
+end
+
+local isfile = isfile or function(file)
+    local suc, res = pcall(readfile, file)
+    return suc and res ~= nil and res ~= ''
+end
+
+local delfile = delfile or function(file)
+    writefile(file, '')
+end
+
+local commitText = readfile('newvape/profiles/commit.txt')
+
+local function downloadFile(path, func)
+    if not isfile(path) then
+        local cleanPath = select(1, path:gsub('newvape/', ''))
+        local suc, res = pcall(game.HttpGet, game, 'https://raw.githubusercontent.com/'..EXPECTED_REPO_OWNER..'/'..EXPECTED_REPO_NAME..'/'..commitText..'/'..cleanPath, true)
+        if not suc or res == '404: Not Found' then
+            error(res)
+        end
+        if path:find('.lua') then
+            res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
+        end
+        writefile(path, res)
+    end
+    return (func or readfile)(path)
+end
+
+local function wipeFolder(path)
+    if not isfolder(path) then return end
+    for _, file in listfiles(path) do
+        if not file:find('loader') then
+            if isfile(file) then
+                local content = readfile(file)
+                if content:sub(1, 103) == '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.' then
+                    delfile(file)
+                end
+            end
+        end
+    end
+end
+
+local folders = {'newvape', 'newvape/games', 'newvape/profiles', 'newvape/assets', 'newvape/libraries', 'newvape/guis', 'newvape/security'}
+for i = 1, #folders do
+    if not isfolder(folders[i]) then
+        makefolder(folders[i])
+    end
+end
+
+if not shared.VapeDeveloper then
+    local _, subbed = pcall(game.HttpGet, game, 'https://github.com/'..EXPECTED_REPO_OWNER..'/'..EXPECTED_REPO_NAME)
+    local commit = subbed:find('currentOid')
+    commit = commit and subbed:sub(commit + 13, commit + 52) or nil
+    commit = commit and #commit == 40 and commit or 'main'
+    if commit == 'main' or (isfile('newvape/profiles/commit.txt') and readfile('newvape/profiles/commit.txt') or '') ~= commit then
+        wipeFolder('newvape')
+        wipeFolder('newvape/games')
+        wipeFolder('newvape/guis')
+        wipeFolder('newvape/libraries')
+    end
+    writefile('newvape/profiles/commit.txt', commit)
+end
+
+return loadstring(downloadFile('newvape/main.lua'), 'main')()
