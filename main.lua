@@ -13,7 +13,7 @@ local function validateSecurity()
     if not isfile('newvape/security/validated') then
         game.StarterGui:SetCore("SendNotification", {
             Title = "Security Error",
-            Text = "No validation file found. Access denied.",
+            Text = "no validation file found",
             Duration = 5
         })
         return false, nil
@@ -27,7 +27,7 @@ local function validateSecurity()
     if not success or not validationData then
         game.StarterGui:SetCore("SendNotification", {
             Title = "Security Error",
-            Text = "Corrupted validation file. Access denied.",
+            Text = "corrupted validation file",
             Duration = 5
         })
         return false, nil
@@ -36,7 +36,7 @@ local function validateSecurity()
     if not validationData.username or not validationData.repo_owner or not validationData.repo_name or not validationData.validated then
         game.StarterGui:SetCore("SendNotification", {
             Title = "Security Error",
-            Text = "Invalid validation data. Access denied.",
+            Text = "invalid validation data",
             Duration = 5
         })
         return false, nil
@@ -45,7 +45,7 @@ local function validateSecurity()
     if not isfile('newvape/security/'..validationData.username) then
         game.StarterGui:SetCore("SendNotification", {
             Title = "Security Error",
-            Text = "User validation missing. Access denied.",
+            Text = "user validation missing",
             Duration = 5
         })
         return false, nil
@@ -57,7 +57,7 @@ local function validateSecurity()
     if validationData.repo_owner ~= EXPECTED_REPO_OWNER or validationData.repo_name ~= EXPECTED_REPO_NAME then
         game.StarterGui:SetCore("SendNotification", {
             Title = "Security Error",
-            Text = "Unauthorized repository detected. Access denied.",
+            Text = "unauthorized repository detected",
             Duration = 5
         })
         return false, nil
@@ -99,16 +99,18 @@ local function validateSecurity()
     if not accounts then
         game.StarterGui:SetCore("SendNotification", {
             Title = "Connection Error",
-            Text = "Failed to verify account status. Access denied.",
+            Text = "failed to verify account status",
             Duration = 5
         })
         return false, nil
     end
     
     local accountValid = false
+    local accountActive = false
     for _, account in pairs(accounts) do
         if account.Username == validationData.username then
             accountValid = true
+            accountActive = account.IsActive == true
             break
         end
     end
@@ -116,7 +118,16 @@ local function validateSecurity()
     if not accountValid then
         game.StarterGui:SetCore("SendNotification", {
             Title = "Access Revoked",
-            Text = "Your account is no longer authorized. Access denied.",
+            Text = "your account is no longer authorized",
+            Duration = 5
+        })
+        return false, nil
+    end
+    
+    if not accountActive then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Account Inactive",
+            Text = "your account is currently inactive",
             Duration = 5
         })
         return false, nil
@@ -168,6 +179,66 @@ local function downloadFile(path, func)
 	return (func or readfile)(path)
 end
 
+local function checkAccountActive()
+    local function decodeBase64(data)
+        local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+        data = string.gsub(data, '[^'..b..'=]', '')
+        return (data:gsub('.', function(x)
+            if (x == '=') then return '' end
+            local r,f='',(b:find(x)-1)
+            for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
+            return r;
+        end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+            if (#x ~= 8) then return '' end
+            local c=0
+            for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
+            return string.char(c)
+        end))
+    end
+
+    local encryptedAccountUrl = "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL3dyZWFsYWVyby93aGl0ZWxpc3RjaGVjay9tYWluL0FjY291bnRTeXN0ZW0ubHVh"
+    local ACCOUNT_SYSTEM_URL = decodeBase64(encryptedAccountUrl)
+    
+    local function fetchAccounts()
+        local success, response = pcall(function()
+            return game:HttpGet(ACCOUNT_SYSTEM_URL)
+        end)
+        if success and response then
+            local accountsTable = loadstring(response)()
+            if accountsTable and accountsTable.Accounts then
+                return accountsTable.Accounts
+            end
+        end
+        return nil
+    end
+    
+    local accounts = fetchAccounts()
+    if not accounts then return true end
+    
+    for _, account in pairs(accounts) do
+        if account.Username == shared.ValidatedUsername then
+            return account.IsActive == true
+        end
+    end
+    return false
+end
+
+local function startActiveCheck()
+    while task.wait(30) do
+        if not checkAccountActive() then
+            if shared.vape then
+                shared.vape:Uninject()
+            end
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "Access Revoked",
+                Text = "Your account has been deactivated.",
+                Duration = 5
+            })
+            break
+        end
+    end
+end
+
 local function finishLoading()
 	vape.Init = nil
 	vape:Load()
@@ -177,6 +248,10 @@ local function finishLoading()
 			task.wait(10)
 		until not vape.Loaded
 	end)
+
+    if shared.ValidatedUsername then
+        task.spawn(startActiveCheck)
+    end
 
 	local teleportedServers
 	vape:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
