@@ -1,4 +1,5 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 
 local run = function(func)
 	func()
@@ -12974,4 +12975,18 @@ run(function()
 		end,
 		Default = true
 	})
+end)
+
+run(function()
+    local EmptyGameTP = vape.Categories.Utility:CreateModule({
+        Name = 'Empty Game TP',
+        Function = function(callback)
+            if callback then
+                local TeleportService = game:GetService("TeleportService")
+                local data = TeleportService:GetLocalPlayerTeleportData()
+                game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer, data)
+            end
+        end,
+        Tooltip = 'Empty game TP - clear match hisotry'
+    })
 end)
