@@ -122,9 +122,11 @@ local function SecurityCheck(loginData)
     end
     
     local accountFound = false
+    local accountActive = false
     for _, account in pairs(accounts) do
         if account.Username == inputUsername and account.Password == inputPassword then
             accountFound = true
+            accountActive = account.IsActive == true
             break
         end
     end
@@ -133,6 +135,15 @@ local function SecurityCheck(loginData)
         game.StarterGui:SetCore("SendNotification", {
             Title = "Access Denied",
             Text = "wrong info dm 5qvx for access",
+            Duration = 3
+        })
+        return false
+    end
+    
+    if not accountActive then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Account Inactive",
+            Text = "Your account is currently inactive.",
             Duration = 3
         })
         return false
