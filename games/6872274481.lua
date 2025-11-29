@@ -1,4 +1,4 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+	--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 
 local run = function(func)
 	func()
@@ -4734,6 +4734,7 @@ run(function()
 	rayCheck.FilterType = Enum.RaycastFilterType.Include
 	rayCheck.FilterDescendantsInstances = {workspace:FindFirstChild('Map') or workspace}
 	local oldCalculateImportantLaunchValues = nil
+	local isProcessing = false
 	
 	local selectedTarget = nil
 	local targetOutline = nil
@@ -4799,6 +4800,11 @@ run(function()
 				
 				oldCalculateImportantLaunchValues = bedwars.ProjectileController.calculateImportantLaunchValues
 				bedwars.ProjectileController.calculateImportantLaunchValues = function(...)	
+					if isProcessing then
+						return oldCalculateImportantLaunchValues(...)
+					end
+					
+					isProcessing = true
 					hovering = true
 					local self, projmeta, worldmeta, origin, shootpos = ...
 					local originPos = entitylib.isAlive and (shootpos or entitylib.character.RootPart.Position) or Vector3.zero
@@ -4821,14 +4827,17 @@ run(function()
 					if plr and plr.Character and plr[TargetPart.Value] and (plr[TargetPart.Value].Position - originPos).Magnitude <= Range.Value then
 						local pos = shootpos or (self.getLaunchPosition and self:getLaunchPosition(origin) or origin)
 						if not pos then
+							isProcessing = false
 							return oldCalculateImportantLaunchValues(...)
 						end
 
 						if (not OtherProjectiles.Enabled) and not projmeta.projectile:find('arrow') then
+							isProcessing = false
 							return oldCalculateImportantLaunchValues(...)
 						end
 
 						if table.find(Blacklist.ListEnabled, projmeta.projectile) then
+							isProcessing = false
 							return oldCalculateImportantLaunchValues(...)
 						end
 
@@ -4858,12 +4867,13 @@ run(function()
 							end
 						end
 
-						if store.hand and store.hand.tool then
+						if store and store.hand and store.hand.tool then
 							if store.hand.tool.Name:find("spellbook") then
 								local targetPos = plr.RootPart.Position
 								local selfPos = lplr.Character.PrimaryPart.Position
 								local expectedTime = (selfPos - targetPos).Magnitude / 160
 								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
+								isProcessing = false
 								return {
 									initialVelocity = (targetPos - selfPos).Unit * 160,
 									positionFrom = offsetpos,
@@ -4876,6 +4886,7 @@ run(function()
 								local selfPos = lplr.Character.PrimaryPart.Position
 								local expectedTime = (selfPos - targetPos).Magnitude / 80
 								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
+								isProcessing = false
 								return {
 									initialVelocity = (targetPos - selfPos).Unit * 80,
 									positionFrom = offsetpos,
@@ -4924,6 +4935,7 @@ run(function()
 							
 							if angleFromHorizontal > minAngle and angleFromHorizontal < maxAngle then
 								targetinfo.Targets[plr] = tick() + 1
+								isProcessing = false
 								return {
 									initialVelocity = finalDirection * projSpeed,
 									positionFrom = offsetpos,
@@ -4936,6 +4948,7 @@ run(function()
 					end
 
 					hovering = false
+					isProcessing = false
 					return oldCalculateImportantLaunchValues(...)
 				end
 			else
