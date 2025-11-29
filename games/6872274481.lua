@@ -1874,7 +1874,8 @@ run(function()
                 ["mage"] = "rbxassetid://10982191792",
                 ["void_dragon"] = "rbxassetid://10982192753",
                 ["cat"] = "rbxassetid://15350740470",
-                ["wind_walker"] = "rbxassetid://9872355499"
+                ["wind_walker"] = "rbxassetid://9872355499",
+				['skeleton'] = "rbxassetid://120123419412119"
             }
 
             local function createkitrender(plr)
