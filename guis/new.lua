@@ -1,4 +1,5 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -3127,7 +3128,8 @@ function mainapi:CreateGUI()
 			Color3.fromRGB(5, 133, 104),
 			Color3.fromRGB(47, 122, 229),
 			Color3.fromRGB(126, 84, 217),
-			Color3.fromRGB(232, 96, 152)
+			Color3.fromRGB(232, 96, 152),
+			Color3.fromRGB(255, 255, 255)
 		}
 		local slidercolorpos = {
 			4,
@@ -3136,7 +3138,8 @@ function mainapi:CreateGUI()
 			90,
 			119,
 			148,
-			177
+			177,
+			206
 		}
 
 		local function createSlider(name, gradientColor)
@@ -3162,9 +3165,9 @@ function mainapi:CreateGUI()
 			title.Parent = slider
 			local holder = Instance.new('Frame')
 			holder.Name = 'Slider'
-			holder.Size = UDim2.fromOffset(200, 2)
+			holder.Size = UDim2.fromOffset(229, 2)
 			holder.Position = UDim2.fromOffset(10, 37)
-			holder.BackgroundColor3 = Color3.new(1, 1, 1)
+			holder.BackgroundTransparency = 1
 			holder.BorderSizePixel = 0
 			holder.Parent = slider
 			local uigradient = Instance.new('UIGradient')
