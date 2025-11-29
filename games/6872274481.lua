@@ -1,6 +1,7 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 
 local run = function(func)
 	func()
@@ -2135,54 +2136,30 @@ run(function()
 	local AirVelocity
 	local AirHeight
 	local rand, old = Random.new()
-	local savedHorizontal = 0
-	local savedVertical = 0
-	local isInAir = false
-	local groundY = 0
-	local lastGroundUpdate = 0
+	local baseGroundY = nil
 	
-	local function updateGroundLevel()
-		if not entitylib.isAlive then return end
-		
-		local humanoid = entitylib.character.Humanoid
-		local rootPart = entitylib.character.RootPart
-		local currentY = rootPart.Position.Y
-		
-		-- Only update ground level if:
-		-- 1. Standing on ground (not in air)
-		-- 2. Current position is LOWER than or equal to last ground position (going down, not up)
-		if humanoid.FloorMaterial ~= Enum.Material.Air then
-			if currentY <= groundY or groundY == 0 then
-				groundY = currentY
-				lastGroundUpdate = tick()
-			end
-		end
-	end
-	
-	local function isHighInAir()
+	local function isHighAboveBase()
 		if not entitylib.isAlive then return false end
 		
 		local rootPart = entitylib.character.RootPart
 		local currentY = rootPart.Position.Y
 		
-		-- Update ground level if we're on the ground
-		updateGroundLevel()
+		if not baseGroundY then
+			baseGroundY = currentY
+		end
 		
-		-- Calculate height above last known ground position
-		local heightAboveGround = currentY - groundY
-		local blocksAboveGround = heightAboveGround / 3
+		local heightAboveBase = currentY - baseGroundY
+		local blocksAboveBase = heightAboveBase / 3
 		
-		-- If you're more than AirHeight blocks above ground, activate air velocity
-		return blocksAboveGround > AirHeight.Value
+		return blocksAboveBase > AirHeight.Value
 	end
 	
 	Velocity = vape.Categories.Combat:CreateModule({
 		Name = 'Velocity',
 		Function = function(callback)
 			if callback then
-				-- Initialize ground level when velocity is enabled
 				if entitylib.isAlive then
-					groundY = entitylib.character.RootPart.Position.Y
+					baseGroundY = entitylib.character.RootPart.Position.Y
 				end
 				
 				old = bedwars.KnockbackUtil.applyKnockback
@@ -2197,12 +2174,10 @@ run(function()
 					if check then
 						knockback = knockback or {}
 						
-						-- Air Velocity logic
 						local horizValue = Horizontal.Value
 						local vertValue = Vertical.Value
 						
-						if AirVelocity.Enabled and isHighInAir() then
-							-- When high in air, use 0% velocity (0% knockback reduction = full knockback)
+						if AirVelocity.Enabled and isHighAboveBase() then
 							horizValue = 0
 							vertValue = 0
 						end
@@ -2215,29 +2190,9 @@ run(function()
 					
 					return old(root, mass, dir, knockback, ...)
 				end
-				
-				-- Monitor ground level continuously
-				task.spawn(function()
-					repeat
-						if entitylib.isAlive then
-							updateGroundLevel()
-							
-							local wasInAir = isInAir
-							isInAir = isHighInAir()
-							
-							-- Just switched from ground to air
-							if isInAir and not wasInAir then
-								savedHorizontal = Horizontal.Value
-								savedVertical = Vertical.Value
-							end
-						end
-						task.wait(0.1)
-					until not Velocity.Enabled
-				end)
 			else
 				bedwars.KnockbackUtil.applyKnockback = old
-				isInAir = false
-				groundY = 0
+				baseGroundY = nil
 			end
 		end,
 		Tooltip = 'Reduces knockback taken'
@@ -2269,12 +2224,27 @@ run(function()
 		Max = 20,
 		Default = 6,
 		Suffix = ' blocks',
-		Tooltip = 'How many blocks above ground to activate air velocity'
+		Tooltip = 'How many blocks above your base position to activate'
 	})
 	TargetCheck = Velocity:CreateToggle({Name = 'Only when targeting'})
 	AirVelocity = Velocity:CreateToggle({
 		Name = 'Air Velocity',
-		Tooltip = 'Automatically reduces velocity to 0% when high in the air'
+		Tooltip = 'Takes full knockback when building high above your base position',
+		Function = function(callback)
+			if callback and entitylib.isAlive then
+				baseGroundY = entitylib.character.RootPart.Position.Y
+			end
+		end
+	})
+	
+	Velocity:CreateButton({
+		Name = 'Reset Base Position',
+		Function = function()
+			if entitylib.isAlive then
+				baseGroundY = entitylib.character.RootPart.Position.Y
+				notif('Air Velocity', string.format('Base position reset to Y: %.1f', baseGroundY), 3)
+			end
+		end
 	})
 end)
 	
@@ -7165,25 +7135,53 @@ run(function()
 					continue
 				end
 				
+				local isCasting = false
+				if Legit.Enabled then
+					if lplr.Character:GetAttribute("Casting") or 
+					lplr.Character:GetAttribute("UsingAbility") or
+					lplr.Character:GetAttribute("SummonerCasting") then
+						isCasting = true
+					end
+					
+					local humanoid = lplr.Character:FindFirstChildOfClass("Humanoid")
+					if humanoid and humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+						isCasting = true
+					end
+				end
+				
+				if Legit.Enabled and isCasting then
+					task.wait(0.1)
+					continue
+				end
+				
+				local range = Legit.Enabled and 31 or 100
 				local plr = entitylib.EntityPosition({
-					Range = 31,
+					Range = 31, 
 					Part = 'RootPart',
 					Players = true,
+					NPCs = true,
 					Sort = sortmethods.Health
 				})
-	
+
+				if plr then
+					local distance = (entitylib.character.RootPart.Position - plr.RootPart.Position).Magnitude
+					if Legit.Enabled and distance > 20 then
+						plr = nil 
+					end
+				end
+
 				if plr and (not Legit.Enabled or (lplr.Character:GetAttribute('Health') or 0) > 0) then
 					local localPosition = entitylib.character.RootPart.Position
 					local shootDir = CFrame.lookAt(localPosition, plr.RootPart.Position).LookVector
 					localPosition += shootDir * math.max((localPosition - plr.RootPart.Position).Magnitude - 16, 0)
-	
+
 					bedwars.Client:Get(remotes.SummonerClawAttack):SendToServer({
 						position = localPosition,
 						direction = shootDir,
 						clientTime = workspace:GetServerTimeNow()
 					})
 				end
-	
+
 				task.wait(0.1)
 			until not AutoKit.Enabled
 		end,
@@ -12914,11 +12912,13 @@ run(function()
         Name = 'Empty Game TP',
         Function = function(callback)
             if callback then
+                EmptyGameTP.ToggleButton(false)
+                
                 local TeleportService = game:GetService("TeleportService")
                 local data = TeleportService:GetLocalPlayerTeleportData()
                 game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer, data)
             end
         end,
-        Tooltip = 'Empty game TP - clear match history'
+        Tooltip = 'Teleports you to an empty server of the current game'
     })
 end)
