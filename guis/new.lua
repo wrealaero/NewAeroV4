@@ -150,6 +150,7 @@ local function addBlur(parent, notif)
 	blur.Image = getcustomasset('newvape/assets/new/'..(notif and 'blurnotif' or 'blur')..'.png')
 	blur.ScaleType = Enum.ScaleType.Slice
 	blur.SliceCenter = Rect.new(52, 31, 261, 502)
+	blur.ZIndex = parent.ZIndex - 1  
 	blur.Parent = parent
 
 	return blur
@@ -2459,7 +2460,24 @@ end)
 function mainapi:BlurCheck()
 	if self.ThreadFix then
 		setthreadidentity(8)
-		runService:SetRobloxGuiFocused((clickgui.Visible or guiService:GetErrorType() ~= Enum.ConnectionError.OK) and self.Blur.Enabled)
+	end
+	local shouldBlur = (clickgui.Visible or guiService:GetErrorType() ~= Enum.ConnectionError.OK) and self.Blur.Enabled
+	
+	for _, window in pairs(self.Windows) do
+		local blur = window:FindFirstChild('Blur')
+		if blur then
+			blur.Visible = shouldBlur and window.Visible
+		end
+	end
+	
+	for _, child in pairs(clickgui:GetDescendants()) do
+		if child.Name == 'Blur' and child:IsA('ImageLabel') then
+			child.Visible = shouldBlur
+		end
+	end
+	
+	if self.ThreadFix then
+		runService:SetRobloxGuiFocused(shouldBlur)
 	end
 end
 
