@@ -213,30 +213,61 @@ local function checkAccountActive()
     end
     
     local accounts = fetchAccounts()
-    if not accounts then return true end
+    if not accounts then 
+        warn("Failed to fetch accounts, assuming active")
+        return true 
+    end
     
     for _, account in pairs(accounts) do
         if account.Username == shared.ValidatedUsername then
+            warn("Account check:", shared.ValidatedUsername, "IsActive =", account.IsActive)
             return account.IsActive == true
         end
     end
+    warn("Account not found in list:", shared.ValidatedUsername)
     return false
 end
 
+local activeCheckRunning = false
 local function startActiveCheck()
+    if activeCheckRunning then return end
+    activeCheckRunning = true
+    
+    warn("Active check started for:", shared.ValidatedUsername)
+    
     while task.wait(30) do
-        if not checkAccountActive() then
-            if shared.vape then
-                shared.vape:Uninject()
+        if shared.vape then
+            warn("Checking account status...")
+            local isActive = checkAccountActive()
+            warn("Is active result:", isActive)
+            
+            if not isActive then
+                warn("Account inactive - uninjecting...")
+                game.StarterGui:SetCore("SendNotification", {
+                    Title = "Access Revoked",
+                    Text = "Your account has been deactivated.",
+                    Duration = 5
+                })
+                
+                task.wait(2)
+                
+                if shared.vape and shared.vape.Uninject then
+                    shared.vape:Uninject()
+                else
+                    warn("Forcing uninject...")
+                    shared.vape = nil
+                    if getgenv and getgenv().vape then
+                        getgenv().vape = nil
+                    end
+                    error("Account deactivated - forcing uninject")
+                end
+                break
             end
-            game.StarterGui:SetCore("SendNotification", {
-                Title = "Access Revoked",
-                Text = "Your account has been deactivated.",
-                Duration = 5
-            })
+        else
             break
         end
     end
+    activeCheckRunning = false
 end
 
 local function finishLoading()
@@ -250,7 +281,10 @@ local function finishLoading()
 	end)
 
     if shared.ValidatedUsername then
-        task.spawn(startActiveCheck)
+        task.spawn(function()
+            warn("Starting active check system...")
+            startActiveCheck()
+        end)
     end
 
 	local teleportedServers
