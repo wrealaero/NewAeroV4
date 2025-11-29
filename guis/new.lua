@@ -1,5 +1,3 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -151,7 +149,6 @@ local function addBlur(parent, notif)
 	blur.Image = getcustomasset('newvape/assets/new/'..(notif and 'blurnotif' or 'blur')..'.png')
 	blur.ScaleType = Enum.ScaleType.Slice
 	blur.SliceCenter = Rect.new(52, 31, 261, 502)
-	blur.ZIndex = parent.ZIndex - 1  
 	blur.Parent = parent
 
 	return blur
@@ -317,7 +314,7 @@ local function downloadFile(path, func)
 	if not isfile(path) then
 		createDownloader(path)
 		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, path:gsub('newvape/', '')), true)
+			return game:HttpGet('https://raw.githubusercontent.com/wrealaero/VapeV4ForRoblox/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, path:gsub('newvape/', '')), true)
 		end)
 		if not suc or res == '404: Not Found' then
 			error(res)
@@ -2461,24 +2458,7 @@ end)
 function mainapi:BlurCheck()
 	if self.ThreadFix then
 		setthreadidentity(8)
-	end
-	local shouldBlur = (clickgui.Visible or guiService:GetErrorType() ~= Enum.ConnectionError.OK) and self.Blur.Enabled
-	
-	for _, window in pairs(self.Windows) do
-		local blur = window:FindFirstChild('Blur')
-		if blur then
-			blur.Visible = shouldBlur and window.Visible
-		end
-	end
-	
-	for _, child in pairs(clickgui:GetDescendants()) do
-		if child.Name == 'Blur' and child:IsA('ImageLabel') then
-			child.Visible = shouldBlur
-		end
-	end
-	
-	if self.ThreadFix then
-		runService:SetRobloxGuiFocused(shouldBlur)
+		runService:SetRobloxGuiFocused((clickgui.Visible or guiService:GetErrorType() ~= Enum.ConnectionError.OK) and self.Blur.Enabled)
 	end
 end
 
@@ -2503,11 +2483,10 @@ function mainapi:CreateGUI()
 	makeDraggable(window)
 	local logo = Instance.new('ImageLabel')
 	logo.Name = 'VapeLogo'
-	logo.Size = UDim2.fromOffset(120, 25)
+	logo.Size = UDim2.fromOffset(62, 18)
 	logo.Position = UDim2.fromOffset(11, 10)
 	logo.BackgroundTransparency = 1
 	logo.Image = getcustomasset('newvape/assets/new/guivape.png')
-	logo.ScaleType = Enum.ScaleType.Fit
 	logo.ImageColor3 = select(3, uipallet.Main:ToHSV()) > 0.5 and uipallet.Text or Color3.new(1, 1, 1)
 	logo.Parent = window
 	local logov4 = Instance.new('ImageLabel')
@@ -3128,8 +3107,7 @@ function mainapi:CreateGUI()
 			Color3.fromRGB(5, 133, 104),
 			Color3.fromRGB(47, 122, 229),
 			Color3.fromRGB(126, 84, 217),
-			Color3.fromRGB(232, 96, 152),
-			Color3.fromRGB(255, 255, 255)
+			Color3.fromRGB(232, 96, 152)
 		}
 		local slidercolorpos = {
 			4,
@@ -3138,8 +3116,7 @@ function mainapi:CreateGUI()
 			90,
 			119,
 			148,
-			177,
-			206
+			177
 		}
 
 		local function createSlider(name, gradientColor)
@@ -3165,9 +3142,9 @@ function mainapi:CreateGUI()
 			title.Parent = slider
 			local holder = Instance.new('Frame')
 			holder.Name = 'Slider'
-			holder.Size = UDim2.fromOffset(229, 2)
+			holder.Size = UDim2.fromOffset(200, 2)
 			holder.Position = UDim2.fromOffset(10, 37)
-			holder.BackgroundTransparency = 1
+			holder.BackgroundColor3 = Color3.new(1, 1, 1)
 			holder.BorderSizePixel = 0
 			holder.Parent = slider
 			local uigradient = Instance.new('UIGradient')
@@ -4091,7 +4068,7 @@ function mainapi:CreateOverlay(categorysettings)
 		Type = 'Overlay',
 		Expanded = false,
 		Button = self.Overlays:CreateToggle({
-		Name = categorysettings.Name,
+			Name = categorysettings.Name,
 			Function = function(callback)
 				window.Visible = callback and (clickgui.Visible or categoryapi.Pinned)
 				if not callback then
@@ -5934,7 +5911,7 @@ general:CreateButton({
 		if shared.VapeDeveloper then
 			loadstring(readfile('newvape/loader.lua'), 'loader')()
 		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true))()
+			loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/VapeV4ForRoblox/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true))()
 		end
 	end,
 	Tooltip = 'This will set your profile to the default settings of Vape'
@@ -5953,7 +5930,7 @@ general:CreateButton({
 		if shared.VapeDeveloper then
 			loadstring(readfile('newvape/loader.lua'), 'loader')()
 		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true))()
+			loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/VapeV4ForRoblox/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true))()
 		end
 	end,
 	Tooltip = 'Reloads vape for debugging purposes'
@@ -6061,7 +6038,7 @@ guipane:CreateDropdown({
 			if shared.VapeDeveloper then
 				loadstring(readfile('newvape/loader.lua'), 'loader')()
 			else
-				loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true))()
+				loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/VapeV4ForRoblox/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true))()
 			end
 		end
 	end,
