@@ -7144,7 +7144,7 @@ run(function()
 				
 				local range = Legit.Enabled and 31 or 100
 				local plr = entitylib.EntityPosition({
-					Range = 31, 
+					Range = 35, 
 					Part = 'RootPart',
 					Players = true,
 					NPCs = true,
@@ -7153,7 +7153,7 @@ run(function()
 
 				if plr then
 					local distance = (entitylib.character.RootPart.Position - plr.RootPart.Position).Magnitude
-					if Legit.Enabled and distance > 20 then
+					if Legit.Enabled and distance > 23 then
 						plr = nil 
 					end
 				end
