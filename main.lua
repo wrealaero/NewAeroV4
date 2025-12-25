@@ -66,7 +66,7 @@ end
 
 shared.ValidatedUsername = validatedUsername
 shared.IsGuestAccount = isGuest
-shared.DeviceHWID = shared.DeviceHWID or (isfile('newvape/security/hwid.txt') and readfile('newvape/security/hwid.txt') or "Unknown")
+shared.DeviceHWID = "HWID_CHECK_DISABLED"
 
 local function decodeBase64(data)
     local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -93,24 +93,6 @@ end
 
 local ACCOUNT_SYSTEM_URL = getWhitelistUrl()
 
-local function checkHWID(account)
-    local hwid = shared.DeviceHWID
-    
-    if account.HWID and account.HWID ~= "" and hwid == account.HWID then
-        return true
-    end
-    
-    if account.AllowedHWIDs and #account.AllowedHWIDs > 0 then
-        for _, allowedHWID in pairs(account.AllowedHWIDs) do
-            if hwid == allowedHWID then
-                return true
-            end
-        end
-    end
-    
-    return false
-end
-
 local function checkAccountActive()
     if isGuest then return true end
     
@@ -134,7 +116,7 @@ local function checkAccountActive()
     
     for _, account in pairs(accounts) do
         if account.Username == shared.ValidatedUsername then
-            return account.IsActive == true and checkHWID(account)
+            return account.IsActive == true
         end
     end
     return false
@@ -154,7 +136,7 @@ local function startActiveCheck()
                     if not closetMode then
                         game.StarterGui:SetCore("SendNotification", {
                             Title = "access revoked",
-                            Text = "account deactivated or hwid changed dm aero(5qvx)",
+                            Text = "account deactivated",
                             Duration = 3
                         })
                     end
