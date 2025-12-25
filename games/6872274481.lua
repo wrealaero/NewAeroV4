@@ -9941,33 +9941,6 @@ run(function()
     local tiered, nexttier = {}, {}
     local originalGetShop
     local shopItemsTracked = {}
-    local highestTierPurchased = {}
-    local originalSetInvItem
-    local blockLowerTiers = true
-    
-    local toolTiers = {
-        wood_pickaxe = {tier = 1, type = 'pickaxe'},
-        stone_pickaxe = {tier = 2, type = 'pickaxe'},
-        iron_pickaxe = {tier = 3, type = 'pickaxe'},
-        diamond_pickaxe = {tier = 4, type = 'pickaxe'},
-        
-        wood_axe = {tier = 1, type = 'axe'},
-        stone_axe = {tier = 2, type = 'axe'},
-        iron_axe = {tier = 3, type = 'axe'},
-        diamond_axe = {tier = 4, type = 'axe'},
-        
-        wood_sword = {tier = 1, type = 'sword'},
-        stone_sword = {tier = 2, type = 'sword'},
-        iron_sword = {tier = 3, type = 'sword'},
-        diamond_sword = {tier = 4, type = 'sword'},
-        emerald_sword = {tier = 5, type = 'sword'},
-        
-        wood_dao = {tier = 1, type = 'sword'},
-        stone_dao = {tier = 2, type = 'sword'},
-        iron_dao = {tier = 3, type = 'sword'},
-        diamond_dao = {tier = 4, type = 'sword'},
-        emerald_dao = {tier = 5, type = 'sword'},
-    }
     
     local function applyBypassToItem(item)
         if item and type(item) == "table" then
@@ -10005,144 +9978,21 @@ run(function()
             return result
         end
         
-        local shopModule = game:GetService("ReplicatedStorage"):FindFirstChild("TS")
-        if shopModule then
-            shopModule = shopModule:FindFirstChild("games")
-            if shopModule then
-                shopModule = shopModule:FindFirstChild("bedwars")
-                if shopModule then
-                    shopModule = shopModule:FindFirstChild("shop")
-                    if shopModule then
-                        shopModule = shopModule:FindFirstChild("bedwars-shop")
-                        if shopModule and shopModule:IsA("ModuleScript") then
-                            return require(shopModule)
-                        end
-                    end
-                end
-            end
+        -- alt method: check if the module exists as a regular module if not gg
+        local shopModule = game:GetService("ReplicatedStorage"):FindFirstChild("TS"):FindFirstChild("games"):FindFirstChild("bedwars"):FindFirstChild("shop"):FindFirstChild("bedwars-shop")
+        if shopModule and shopModule:IsA("ModuleScript") then
+            return require(shopModule)
         end
         
         return nil
     end
     
-    local function shouldBlockItem(itemType)
-        if not blockLowerTiers then return false end
-        
-        local toolInfo = toolTiers[itemType]
-        if not toolInfo then return false end
-        
-        local highestTier = highestTierPurchased[toolInfo.type]
-        if highestTier and toolInfo.tier < highestTier then
-            return true
-        end
-        
-        return false
-    end
-    
-    local function updateHighestTiers()
-        for _, item in store.inventory.inventory.items do
-            if item and item.itemType and toolTiers[item.itemType] then
-                local toolInfo = toolTiers[item.itemType]
-                if not highestTierPurchased[toolInfo.type] or toolInfo.tier > highestTierPurchased[toolInfo.type] then
-                    highestTierPurchased[toolInfo.type] = toolInfo.tier
-                end
-            end
-        end
-    end
-    
-    local function forceRemoveItem(itemType)
-        task.spawn(function()
-            for i = 1, 10 do
-                local item, slot = getItem(itemType)
-                if not item then break end
-                
-                pcall(function()
-                    bedwars.Client:Get(remotes.DropItem):SendToServer({
-                        item = item
-                    })
-                end)
-                
-                task.wait(0.1)
-                
-                item, slot = getItem(itemType)
-                if not item then break end
-                
-                pcall(function()
-                    if item.tool then
-                        lplr.Character.HandInvItem.Value = item.tool
-                        task.wait(0.05)
-                        bedwars.Client:Get(remotes.DropItem):SendToServer({
-                            item = item
-                        })
-                    end
-                end)
-                
-                task.wait(0.1)
-                
-                item, slot = getItem(itemType)
-                if not item then break end
-                
-                pcall(function()
-                    if item.tool and item.tool.Parent then
-                        item.tool:Destroy()
-                    end
-                end)
-                
-                task.wait(0.1)
-            end
-        end)
-    end
-    
-    local function cleanupLowerTiers()
-        if not entitylib.isAlive then return end
-        
-        task.spawn(function()
-            task.wait(0.3)
-            
-            for itemType, toolInfo in pairs(toolTiers) do
-                if shouldBlockItem(itemType) then
-                    local item = getItem(itemType)
-                    if item then
-                        forceRemoveItem(itemType)
-                    end
-                end
-            end
-        end)
-    end
-    
-    local function dropLowerTiersBeforeDeath()
-        if not entitylib.isAlive then return end
-        
-        local health = entitylib.character.Humanoid.Health
-        local maxHealth = entitylib.character.Humanoid.MaxHealth
-        
-        if health < maxHealth * 0.3 then
-            for itemType, toolInfo in pairs(toolTiers) do
-                if shouldBlockItem(itemType) then
-                    local item = getItem(itemType)
-                    if item then
-                        task.spawn(function()
-                            pcall(function()
-                                bedwars.Client:Get(remotes.DropItem):SendToServer({
-                                    item = item
-                                })
-                            end)
-                        end)
-                    end
-                end
-            end
-        end
-    end
-    
     ShopTierBypass = vape.Categories.Utility:CreateModule({
         Name = 'Shop Tier Bypass',
         Function = function(callback)
-            
             if callback then
                 repeat task.wait() until store.shopLoaded or not ShopTierBypass.Enabled
                 if ShopTierBypass.Enabled then
-                    blockLowerTiers = true
-                    
                     for _, v in pairs(bedwars.Shop.ShopItems) do
                         tiered[v] = v.tiered
                         nexttier[v] = v.nextTier
@@ -10178,65 +10028,8 @@ run(function()
                             end
                         end
                     end
-                    
-                    if not originalSetInvItem then
-                        local Client = bedwars.Client
-                        originalSetInvItem = Client.Get
-                        
-                        Client.Get = function(self, remoteName)
-                            local remote = originalSetInvItem(self, remoteName)
-                            
-                            if remoteName == 'SetInvItem' then
-                                return {
-                                    SendToServer = function(_, data)
-                                        if data and data.hand then
-                                            local itemType = data.hand.itemType
-                                            if shouldBlockItem(itemType) then
-                                                return
-                                            end
-                                        end
-                                        return remote:SendToServer(data)
-                                    end
-                                }
-                            end
-                            
-                            return remote
-                        end
-                    end
-                    
-                    ShopTierBypass:Clean(vapeEvents.InventoryAmountChanged.Event:Connect(function()
-                        updateHighestTiers()
-                        cleanupLowerTiers()
-                    end))
-                    
-                    ShopTierBypass:Clean(entitylib.Events.LocalAdded:Connect(function()
-                        task.wait(0.1)
-                        updateHighestTiers()
-                        
-                        for i = 1, 25 do
-                            task.wait(0.2)
-                            cleanupLowerTiers()
-                        end
-                    end))
-                    
-                    if entitylib.isAlive then
-                        updateHighestTiers()
-                        task.wait(0.5)
-                        cleanupLowerTiers()
-                    end
-                    
-                    task.spawn(function()
-                        while ShopTierBypass.Enabled do
-                            task.wait(0.5)
-                            if entitylib.isAlive then
-                                dropLowerTiersBeforeDeath()
-                            end
-                        end
-                    end)
                 end
             else
-                blockLowerTiers = false
-                
                 for item, _ in pairs(shopItemsTracked) do
                     if item and type(item) == "table" then
                         if tiered[item] ~= nil then
@@ -10249,6 +10042,9 @@ run(function()
                 end
                 
                 if tiered["shopControllerHooked"] then
+                    local shopController = getShopController()
+                    if shopController and shopController.BedwarsShop and shopController.BedwarsShop.getShop then
+                    end
                     tiered["shopControllerHooked"] = nil
                 end
                 
@@ -10257,18 +10053,12 @@ run(function()
                     originalGetShop = nil
                 end
                 
-                if originalSetInvItem then
-                    bedwars.Client.Get = originalSetInvItem
-                    originalSetInvItem = nil
-                end
-                
                 table.clear(tiered)
                 table.clear(nexttier)
                 table.clear(shopItemsTracked)
-                table.clear(highestTierPurchased)
             end
         end,
-        Tooltip = 'Lets you buy things like armor and tools early'
+        Tooltip = 'Lets you buy things like armor and tools early.'
     })
 end)
 	
