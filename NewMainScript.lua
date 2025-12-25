@@ -55,41 +55,11 @@ end
 
 local ACCOUNT_SYSTEM_URL = getWhitelistUrl()
 
-local function getHWID()
-    if gethwid then
-        return gethwid()
-    end
-    
-    local fingerprint = {}
-    
-    if identifyexecutor then
-        table.insert(fingerprint, ({identifyexecutor()})[1] or "Unknown")
-    end
-    
-    table.insert(fingerprint, game.JobId)
-    
-    if game:GetService("HttpService") then
-        table.insert(fingerprint, game:GetService("HttpService"):GenerateGUID(false))
-    end
-    
-    return table.concat(fingerprint, "-")
-end
-
-local DEVICE_HWID = getHWID()
-
-local function copyHWID()
-    if setclipboard then
-        pcall(function() setclipboard(DEVICE_HWID) end)
-        return true
-    end
-    return false
-end
-
 local function saveHWID()
     if not isfolder('newvape/security') then
         makefolder('newvape/security')
     end
-    writefile('newvape/security/hwid.txt', DEVICE_HWID)
+    writefile('newvape/security/hwid.txt', "HWID_CHECK_DISABLED")
 end
 
 local function createValidation(username, isGuest)
@@ -102,7 +72,6 @@ local function createValidation(username, isGuest)
         timestamp = os.time(),
         validated = true,
         guest = isGuest,
-        hwid = DEVICE_HWID,
         checksum = game:GetService("HttpService"):GenerateGUID(false)
     }
     
@@ -168,10 +137,9 @@ local function SecurityCheck(loginData)
     end
     
     if not found then
-        copyHWID()
         if not closetMode then
             game.StarterGui:SetCore("SendNotification", {
-                Title = "wrong info",
+                Title = "Invalid Credentials",
                 Text = "wrong username or password",
                 Duration = 10
             })
@@ -183,7 +151,7 @@ local function SecurityCheck(loginData)
     if not accountData.IsActive then
         if not closetMode then
             game.StarterGui:SetCore("SendNotification", {
-                Title = "account disabled",
+                Title = "Account Disabled",
                 Text = "your account has been deactivated",
                 Duration = 5
             })
@@ -204,7 +172,7 @@ end
 
 shared.ValidatedUsername = username
 shared.IsGuestAccount = isGuest
-shared.DeviceHWID = DEVICE_HWID
+shared.DeviceHWID = "HWID_CHECK_DISABLED"
 
 local encryptedRepo = "d3JlYWxhZXJv"
 local encryptedRepoName = "TmV3QWVyb1Y0"
