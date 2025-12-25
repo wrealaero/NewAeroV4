@@ -5259,6 +5259,8 @@ run(function()
 	local CameraSmooth
 	local InfiniteRange
 	local FirstPersonOnly
+	local VerticalPrediction
+	local BuildingPrediction
 	
 	local rayCheck = RaycastParams.new()
 	rayCheck.FilterType = Enum.RaycastFilterType.Include
@@ -5326,6 +5328,141 @@ run(function()
 		end
 	end
 	
+	local jumpHistory = {}
+	local lastPositions = {}
+	
+	local function updateJumpHistory(plr, currentPos, currentVel, currentTime)
+		local playerId = plr.Player and plr.Player.UserId or "npc"
+		
+		if not jumpHistory[playerId] then
+			jumpHistory[playerId] = {
+				jumpTimes = {},
+				peakHeights = {},
+				lastJumpTime = 0,
+				isJumping = false,
+				jumpStartY = 0,
+				peakY = 0
+			}
+			lastPositions[playerId] = {}
+		end
+		
+		local history = jumpHistory[playerId]
+		
+		table.insert(lastPositions[playerId], {
+			time = currentTime,
+			position = currentPos,
+			velocity = currentVel
+		})
+		
+		while #lastPositions[playerId] > 5 do
+			table.remove(lastPositions[playerId], 1)
+		end
+		
+		local verticalVel = currentVel.Y
+		local isOnGround = verticalVel == 0 or math.abs(verticalVel) < 2
+		
+		if verticalVel > 25 then
+			history.isJumping = true
+			history.jumpStartY = currentPos.Y
+			history.lastJumpTime = currentTime
+		elseif verticalVel < -20 and history.isJumping then
+			if currentPos.Y > history.peakY then
+				history.peakY = currentPos.Y
+			end
+		elseif isOnGround and history.isJumping then
+			history.isJumping = false
+			table.insert(history.jumpTimes, currentTime - history.lastJumpTime)
+			table.insert(history.peakHeights, history.peakY - history.jumpStartY)
+			history.peakY = 0
+			
+			while #history.jumpTimes > 3 do table.remove(history.jumpTimes, 1) end
+			while #history.peakHeights > 3 do table.remove(history.peakHeights, 1) end
+		end
+		
+		return history
+	end
+	
+	local function predictJumpMovement(plr, targetPart, distance, timeToTarget, currentTime)
+		if not VerticalPrediction.Enabled then return Vector3.zero end
+		
+		local playerId = plr.Player and plr.Player.UserId or "npc"
+		local history = jumpHistory[playerId]
+		local currentVel = targetPart.Velocity
+		local verticalVel = currentVel.Y
+		
+		if not history or #lastPositions[playerId] < 2 then
+			return Vector3.zero
+		end
+		
+		local jumpPrediction = Vector3.zero
+		
+		if verticalVel > 30 then
+			local jumpPower = math.min(verticalVel / 50, 1.5)
+			local predictionFactor = 0.18 + (distance / 200) * 0.1
+			jumpPrediction = Vector3.new(0, verticalVel * timeToTarget * predictionFactor * jumpPower, 0)
+			
+		elseif verticalVel > 15 then
+			local predictionFactor = 0.15 + (distance / 200) * 0.08
+			jumpPrediction = Vector3.new(0, verticalVel * timeToTarget * predictionFactor, 0)
+			
+		elseif verticalVel < -25 then
+			local fallFactor = 0.12 + (distance / 200) * 0.06
+			jumpPrediction = Vector3.new(0, verticalVel * timeToTarget * fallFactor, 0)
+			
+		elseif verticalVel < -10 then
+			local fallFactor = 0.08 + (distance / 200) * 0.04
+			jumpPrediction = Vector3.new(0, verticalVel * timeToTarget * fallFactor, 0)
+			
+		elseif history.isJumping then
+			local timeSinceJump = currentTime - history.lastJumpTime
+			if timeSinceJump < 0.3 then
+				jumpPrediction = Vector3.new(0, 20 * timeToTarget * 0.1, 0)
+			else
+				jumpPrediction = Vector3.new(0, -15 * timeToTarget * 0.08, 0)
+			end
+		end
+		
+		return jumpPrediction
+	end
+	
+	local function predictBuildingMovement(plr, targetPart, distance, timeToTarget)
+		if not BuildingPrediction.Enabled then return Vector3.zero end
+		
+		local buildingPrediction = Vector3.zero
+		local currentPos = targetPart.Position
+		
+		local region = Region3.new(
+			currentPos - Vector3.new(6, 15, 6),
+			currentPos + Vector3.new(6, 15, 6)
+		)
+		
+		local parts = workspace:FindPartsInRegion3WithWhiteList(region, {}, 30)
+		
+		local upwardBlocks = 0
+		for _, block in pairs(parts) do
+			if (block.Name:find("wool") or block.Name:find("wood") or block.Name:find("stone") or 
+				block.Name:find("glass") or block.Name:find("clay") or block.Name:find("obsidian")) and 
+			   block.Position.Y > currentPos.Y + 2 then
+				upwardBlocks = upwardBlocks + 1
+			end
+		end
+		
+		if upwardBlocks > 0 then
+			local buildSpeed = 0
+			if distance < 30 then
+				buildSpeed = 8
+			elseif distance < 60 then
+				buildSpeed = 5
+			else
+				buildSpeed = 3
+			end
+			
+			buildingPrediction = Vector3.new(0, buildSpeed * timeToTarget * 0.2, 0)
+		end
+		
+		return buildingPrediction
+	end
+	
 	local ProjectileAimbot = vape.Categories.Blatant:CreateModule({
 		Name = 'ProjectileAimbot',
 		Function = function(callback)
@@ -5344,6 +5481,7 @@ run(function()
 						
 						local originPos = entitylib.character.RootPart.Position
 						local effectiveRange = InfiniteRange.Enabled and 9999 or Range.Value
+						local currentTime = tick()
 						
 						local plr
 						if selectedTarget and selectedTarget.Character and selectedTarget.Character.PrimaryPart then
@@ -5369,25 +5507,50 @@ run(function()
 							local projSpeed = projectileMeta and projectileMeta.speed or 100
 							
 							local targetPos = plr[TargetPart.Value].Position
+							local targetVel = plr[TargetPart.Value].Velocity
 							local distance = (targetPos - originPos).Magnitude
 							local timeToTarget = distance / projSpeed
 							
-							local targetVelocity = plr[TargetPart.Value].Velocity
-							local horizontalVelocity = Vector3.new(targetVelocity.X, 0, targetVelocity.Z)
-							local predictedPosition = targetPos + (horizontalVelocity * timeToTarget * 0.8)
+							updateJumpHistory(plr, targetPos, targetVel, currentTime)
 							
-							predictedPosition = Vector3.new(
-								predictedPosition.X,
-								math.min(predictedPosition.Y, targetPos.Y),
-								predictedPosition.Z
+							local predictedPosition = prediction.predictStrafingMovement(
+								plr.Player, 
+								plr[TargetPart.Value], 
+								projSpeed, 
+								196.2,
+								originPos,
+								timeToTarget
 							)
+							
+							local jumpPrediction = predictJumpMovement(plr, plr[TargetPart.Value], distance, timeToTarget, currentTime)
+							predictedPosition = predictedPosition + jumpPrediction
+							
+							if BuildingPrediction.Enabled then
+								local buildingPred = predictBuildingMovement(plr.Player, plr[TargetPart.Value], distance, timeToTarget)
+								predictedPosition = predictedPosition + buildingPred
+							end
+							
+							local groundCheck = workspace:Raycast(
+								predictedPosition + Vector3.new(0, 5, 0),
+								Vector3.new(0, -20, 0),
+								rayCheck
+							)
+							
+							if groundCheck then
+								local groundHeight = groundCheck.Position.Y
+								predictedPosition = Vector3.new(
+									predictedPosition.X,
+									math.max(predictedPosition.Y, groundHeight + 2.5),
+									predictedPosition.Z
+								)
+							end
 							
 							local targetCFrame = CFrame.lookAt(gameCamera.CFrame.p, predictedPosition)
 							
 							if CameraSmooth.Value == "Linear" then
-								gameCamera.CFrame = gameCamera.CFrame:Lerp(targetCFrame, CameraSpeed.Value * dt)
+								gameCamera.CFrame = gameCamera.CFrame:Lerp(targetCFrame, CameraSpeed.Value * dt * 0.1)
 							elseif CameraSmooth.Value == "Elastic" then
-								local lerpAmount = 1 - math.exp(-CameraSpeed.Value * dt)
+								local lerpAmount = 1 - math.exp(-CameraSpeed.Value * dt * 0.5)
 								gameCamera.CFrame = gameCamera.CFrame:Lerp(targetCFrame, lerpAmount)
 							elseif CameraSmooth.Value == "Instant" then
 								gameCamera.CFrame = targetCFrame
@@ -5408,6 +5571,7 @@ run(function()
 					hovering = true
 					local self, projmeta, worldmeta, origin, shootpos = ...
 					local originPos = entitylib.isAlive and (shootpos or entitylib.character.RootPart.Position) or Vector3.zero
+					local currentTime = tick()
 					
 					local plr
 					if selectedTarget and selectedTarget.Character and (selectedTarget.Character.PrimaryPart.Position - originPos).Magnitude <= Range.Value then
@@ -5466,27 +5630,71 @@ run(function()
 							end
 						end
 
+						local distance = (plr[TargetPart.Value].Position - offsetpos).Magnitude
+						local timeToTarget = distance / projSpeed
+						
+						local targetPos = plr[TargetPart.Value].Position
+						local targetVel = plr[TargetPart.Value].Velocity
+						updateJumpHistory(plr, targetPos, targetVel, currentTime)
+						
 						local predictedPosition = prediction.predictStrafingMovement(
 							plr.Player, 
 							plr[TargetPart.Value], 
 							projSpeed, 
 							gravity,
-							offsetpos
+							offsetpos,
+							timeToTarget
 						)
 						
-						local distance = (plr[TargetPart.Value].Position - offsetpos).Magnitude
-						local rawLook = CFrame.new(offsetpos, plr[TargetPart.Value].Position)
+						local jumpPrediction = predictJumpMovement(plr, plr[TargetPart.Value], distance, timeToTarget, currentTime)
+						predictedPosition = predictedPosition + jumpPrediction
 						
-						local smoothnessFactor = 0.85
-						if distance > 70 then
-							smoothnessFactor = 0.75
-						elseif distance > 40 then
-							smoothnessFactor = 0.80
-						elseif distance < 20 then
-							smoothnessFactor = 0.92
+						if BuildingPrediction.Enabled then
+							local buildingPred = predictBuildingMovement(plr.Player, plr[TargetPart.Value], distance, timeToTarget)
+							predictedPosition = predictedPosition + buildingPred
 						end
 						
-						local smoothLook = rawLook:Lerp(CFrame.new(rawLook.Position, predictedPosition), smoothnessFactor)
+						local groundCheck = workspace:Raycast(
+							predictedPosition + Vector3.new(0, 5, 0),
+							Vector3.new(0, -15, 0),
+							rayCheck
+						)
+						
+						if groundCheck then
+							local groundHeight = groundCheck.Position.Y
+							predictedPosition = Vector3.new(
+								predictedPosition.X,
+								math.max(predictedPosition.Y, groundHeight + 3),
+								predictedPosition.Z
+							)
+						end
+						
+						local ceilingCheck = workspace:Raycast(
+							predictedPosition,
+							Vector3.new(0, 10, 0),
+							rayCheck
+						)
+						
+						if ceilingCheck then
+							predictedPosition = Vector3.new(
+								predictedPosition.X,
+								math.min(predictedPosition.Y, ceilingCheck.Position.Y - 1),
+								predictedPosition.Z
+							)
+						end
+						
+						local smoothnessFactor = 0.8
+						if distance > 80 then
+							smoothnessFactor = 0.65
+						elseif distance > 50 then
+							smoothnessFactor = 0.72
+						elseif distance > 30 then
+							smoothnessFactor = 0.78
+						elseif distance < 15 then
+							smoothnessFactor = 0.88
+						end
+						
+						local smoothLook = CFrame.new(offsetpos, predictedPosition)
 						
 						if projmeta.projectile ~= 'owl_projectile' then
 							smoothLook = smoothLook * CFrame.new(
@@ -5505,7 +5713,7 @@ run(function()
 							predictedPosition, 
 							targetVelocity, 
 							playerGravity, 
-							plr.HipHeight, 
+							plr.HipHeight + 2.5,
 							plr.Jumping and 50 or nil,
 							rayCheck
 						)
@@ -5545,6 +5753,8 @@ run(function()
 					pcall(function() v:Disconnect() end)
 				end
 				table.clear(CoreConnections)
+				table.clear(jumpHistory)
+				table.clear(lastPositions)
 			end
 		end,
 		Tooltip = 'Silently adjusts your aim towards the enemy. Click a player to lock onto them (red outline).'
@@ -5570,6 +5780,16 @@ run(function()
 		Max = 500,
 		Default = 100,
 		Tooltip = 'Maximum distance for target locking'
+	})
+	VerticalPrediction = ProjectileAimbot:CreateToggle({
+		Name = 'Vertical Prediction',
+		Default = true,
+		Tooltip = 'Predict vertical movement (jumping/falling)'
+	})
+	BuildingPrediction = ProjectileAimbot:CreateToggle({
+		Name = 'Building Prediction',
+		Default = true,
+		Tooltip = 'Predict when enemies are building upward'
 	})
 	CameraMode = ProjectileAimbot:CreateToggle({
 		Name = 'Camera Mode',
