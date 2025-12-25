@@ -19,36 +19,6 @@ if closetMode then
     end)
 end
 
-local _1 = {116, 104, 105, 115, 105, 115, 97, 116, 101, 115, 116}
-local _2 = {112, 97, 115, 116, 101, 98, 105, 110, 46, 99, 111, 109}
-local _3 = {114, 97, 119, 47, 67, 118, 50, 102, 77, 120, 56, 57}
-
-local function _a(b)
-    local c = ""
-    for d = 1, #b do
-        c = c .. string.char(b[d])
-    end
-    return c
-end
-
-local function _e(f)
-    local g = ""
-    for h = 1, #f do
-        local i = f:byte(h)
-        g = g .. string.char(255 - i)
-    end
-    return g
-end
-
-local function getWhitelistUrl()
-    local j = _a(_1)
-    local k = _a(_2)
-    local l = _a(_3)
-    return "https://" .. _e(k) .. "/" .. _e(l)
-end
-
-local ACCOUNT_SYSTEM_URL = getWhitelistUrl()
-
 local isfile = isfile or function(file)
 	local suc, res = pcall(function()
 		return readfile(file)
@@ -60,24 +30,49 @@ local delfile = delfile or function(file)
 	writefile(file, '')
 end
 
+local function decodeBase64(data)
+    local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    data = string.gsub(data, '[^'..b..'=]', '')
+    return (data:gsub('.', function(x)
+        if (x == '=') then return '' end
+        local r,f='',(b:find(x)-1)
+        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
+        return r;
+    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+        if (#x ~= 8) then return '' end
+        local c=0
+        for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
+        return string.char(c)
+    end))
+end
+
+local function getWhitelistUrl()
+    local p1 = "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29t"
+    local p2 = "L3dyZWFsYWVyby93aGl0ZWxpc3RjaGVjay9tYWluL0Fj"
+    local p3 = "Y291bnRTeXN0ZW0ubHVh"
+    return decodeBase64(p1 .. p2 .. p3)
+end
+
+local ACCOUNT_SYSTEM_URL = getWhitelistUrl()
+
 local function getHWID()
-    local m = {}
-    
     if gethwid then
         return gethwid()
     end
     
+    local fingerprint = {}
+    
     if identifyexecutor then
-        table.insert(m, ({identifyexecutor()})[1] or "U")
+        table.insert(fingerprint, ({identifyexecutor()})[1] or "Unknown")
     end
     
-    table.insert(m, game.JobId)
+    table.insert(fingerprint, game.JobId)
     
     if game:GetService("HttpService") then
-        table.insert(m, game:GetService("HttpService"):GenerateGUID(false))
+        table.insert(fingerprint, game:GetService("HttpService"):GenerateGUID(false))
     end
     
-    return table.concat(m, "-")
+    return table.concat(fingerprint, "-")
 end
 
 local DEVICE_HWID = getHWID()
@@ -97,101 +92,87 @@ local function saveHWID()
     writefile('newvape/security/hwid.txt', DEVICE_HWID)
 end
 
-local function createValidation(n, o)
+local function createValidation(username, isGuest)
     if not isfolder('newvape/security') then
         makefolder('newvape/security')
     end
     
-    local p = {
-        username = n,
+    local validationData = {
+        username = username,
         timestamp = os.time(),
         validated = true,
-        guest = o,
+        guest = isGuest,
         hwid = DEVICE_HWID,
         checksum = game:GetService("HttpService"):GenerateGUID(false)
     }
     
-    local q = game:GetService("HttpService"):JSONEncode(p)
-    writefile('newvape/security/validated', q)
-    writefile('newvape/security/'..n, tostring(os.time()))
+    local encoded = game:GetService("HttpService"):JSONEncode(validationData)
+    writefile('newvape/security/validated', encoded)
+    writefile('newvape/security/'..username, tostring(os.time()))
     saveHWID()
 end
 
-local function clearValidation(r)
+local function clearValidation(newUsername)
     if not isfolder('newvape/security') then
         return
     end
     
     if isfile('newvape/security/validated') then
-        local s, t = pcall(function()
+        local success, data = pcall(function()
             return game:GetService("HttpService"):JSONDecode(readfile('newvape/security/validated'))
         end)
         
-        if s and t and t.username ~= r then
-            for _, u in listfiles('newvape/security') do
-                if not u:find('hwid.txt') then
-                    delfile(u)
+        if success and data and data.username ~= newUsername then
+            for _, file in listfiles('newvape/security') do
+                if not file:find('hwid.txt') then
+                    delfile(file)
                 end
             end
         end
     end
 end
 
-local function SecurityCheck(v)
+local function SecurityCheck(loginData)
     saveHWID()
     
-    if not v or type(v) ~= "table" or not v.Username or not v.Password then
+    if not loginData or type(loginData) ~= "table" or not loginData.Username or not loginData.Password then
         createValidation("guest_"..tostring(os.time()), true)
-        if not closetMode then
-            game.StarterGui:SetCore("SendNotification", {
-                Title = "Guest Mode",
-                Text = "Running as a guest account",
-                Duration = 3
-            })
-        end
         return true, "guest_"..tostring(os.time()), true
     end
     
-    local w = v.Username
-    local x = v.Password
+    local username = loginData.Username
+    local password = loginData.Password
     
-    clearValidation(w)
+    clearValidation(username)
     
-    local y, z = pcall(function()
-        local A = game:HttpGet(ACCOUNT_SYSTEM_URL)
-        local B = loadstring(A)()
-        return B and B.Accounts
+    local accountsSuccess, accounts = pcall(function()
+        local response = game:HttpGet(ACCOUNT_SYSTEM_URL)
+        local accountsTable = loadstring(response)()
+        return accountsTable and accountsTable.Accounts
     end)
     
-    if not y or not z then
-        createValidation(w, false)
-        if not closetMode then
-            game.StarterGui:SetCore("SendNotification", {
-                Title = "Login Successful",
-                Text = "Logged in as " .. w,
-                Duration = 5
-            })
-        end
-        return true, w, false
+    if not accountsSuccess or not accounts then
+        createValidation(username, false)
+        return true, username, false
     end
     
-    local C = false
-    local D = nil
+    local found = false
+    local accountData = nil
     
-    for _, E in pairs(z) do
-        if E.Username == w and E.Password == x then
-            C = true
-            D = E
+    for _, account in pairs(accounts) do
+        if account.Username == username and account.Password == password then
+            found = true
+            accountData = account
             break
         end
     end
     
-    if not C then
+    if not found then
         copyHWID()
         if not closetMode then
             game.StarterGui:SetCore("SendNotification", {
-                Title = "Invalid Credentials",
-                Text = "Wrong username or password",
+                Title = "wrong info",
+                Text = "wrong username or password",
                 Duration = 10
             })
         end
@@ -199,11 +180,11 @@ local function SecurityCheck(v)
         return true, "guest_"..tostring(os.time()), true
     end
     
-    if not D.IsActive then
+    if not accountData.IsActive then
         if not closetMode then
             game.StarterGui:SetCore("SendNotification", {
-                Title = "Account Disabled",
-                Text = "Your account has been deactivated",
+                Title = "account disabled",
+                Text = "your account has been deactivated",
                 Duration = 5
             })
         end
@@ -211,80 +192,71 @@ local function SecurityCheck(v)
         return true, "guest_"..tostring(os.time()), true
     end
     
-    createValidation(w, false)
-    return true, w, false
+    createValidation(username, false)
+    return true, username, false
 end
 
-local F, G, H = SecurityCheck(options)
+local success, username, isGuest = SecurityCheck(options)
 
-if not F then
+if not success then
     return
 end
 
-shared.ValidatedUsername = G
-shared.IsGuestAccount = H
+shared.ValidatedUsername = username
+shared.IsGuestAccount = isGuest
 shared.DeviceHWID = DEVICE_HWID
 
-local I = {100, 51, 74, 101, 89, 87, 119, 98, 71, 56, 121, 97, 87, 90, 51}
-local J = {84, 109, 90, 48, 99, 109, 56, 121, 89, 87, 52, 52}
+local encryptedRepo = "d3JlYWxhZXJv"
+local encryptedRepoName = "TmV3QWVyb1Y0"
+local EXPECTED_REPO_OWNER = decodeBase64(encryptedRepo)
+local EXPECTED_REPO_NAME = decodeBase64(encryptedRepoName)
 
-local function _K(L)
-    local M = ""
-    for N = 1, #L do
-        M = M .. string.char(L[N])
-    end
-    return M
-end
-
-local EXPECTED_REPO_OWNER = _K(I)
-local EXPECTED_REPO_NAME = _K(J)
-
-local function downloadFile(O, P)
-	if not isfile(O) then
-		local Q, R = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/'..EXPECTED_REPO_OWNER..'/'..EXPECTED_REPO_NAME..'/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, O:gsub('newvape/', '')), true)
+local function downloadFile(path, func)
+	if not isfile(path) then
+		local suc, res = pcall(function()
+			return game:HttpGet('https://raw.githubusercontent.com/'..EXPECTED_REPO_OWNER..'/'..EXPECTED_REPO_NAME..'/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, path:gsub('newvape/', '')), true)
 		end)
-		if not Q or R == '404: Not Found' then
-			error(R)
+		if not suc or res == '404: Not Found' then
+			error(res)
 		end
-		if O:find('.lua') then
-			R = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..R
+		if path:find('.lua') then
+			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
 		end
-		writefile(O, R)
+		writefile(path, res)
 	end
-	return (P or readfile)(O)
+	return (func or readfile)(path)
 end
 
-local function wipeFolder(S)
-	if not isfolder(S) then return end
-	for _, T in listfiles(S) do
-		if T:find('loader') or T:find('hwid.txt') then continue end
-		if isfile(T) and select(1, readfile(T):find('--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.')) == 1 then
-			delfile(T)
+local function wipeFolder(path)
+	if not isfolder(path) then return end
+	for _, file in listfiles(path) do
+		if file:find('loader') or file:find('hwid.txt') then continue end
+		if isfile(file) and select(1, readfile(file):find('--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.')) == 1 then
+			delfile(file)
 		end
 	end
 end
 
-for _, U in {'newvape', 'newvape/games', 'newvape/profiles', 'newvape/assets', 'newvape/libraries', 'newvape/guis', 'newvape/security'} do
-	if not isfolder(U) then
-		makefolder(U)
+for _, folder in {'newvape', 'newvape/games', 'newvape/profiles', 'newvape/assets', 'newvape/libraries', 'newvape/guis', 'newvape/security'} do
+	if not isfolder(folder) then
+		makefolder(folder)
 	end
 end
 
 if not shared.VapeDeveloper then
-	local V, W = pcall(function()
+	local _, subbed = pcall(function()
 		return game:HttpGet('https://github.com/'..EXPECTED_REPO_OWNER..'/'..EXPECTED_REPO_NAME)
 	end)
-	local X = W:find('currentOid')
-	X = X and W:sub(X + 13, X + 52) or nil
-	X = X and #X == 40 and X or 'main'
-	if X == 'main' or (isfile('newvape/profiles/commit.txt') and readfile('newvape/profiles/commit.txt') or '') ~= X then
+	local commit = subbed:find('currentOid')
+	commit = commit and subbed:sub(commit + 13, commit + 52) or nil
+	commit = commit and #commit == 40 and commit or 'main'
+	if commit == 'main' or (isfile('newvape/profiles/commit.txt') and readfile('newvape/profiles/commit.txt') or '') ~= commit then
 		wipeFolder('newvape')
 		wipeFolder('newvape/games')
 		wipeFolder('newvape/guis')
 		wipeFolder('newvape/libraries')
 	end
-	writefile('newvape/profiles/commit.txt', X)
+	writefile('newvape/profiles/commit.txt', commit)
 end
 
 return loadstring(downloadFile('newvape/main.lua'), 'main')(options)
