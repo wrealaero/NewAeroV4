@@ -28,130 +28,139 @@ if identifyexecutor then
 	end
 end
 
-local function _1()
+local function validateSecurity()
     if not isfile or not isfile('newvape/security/validated') then
         if not closetMode then
             game.StarterGui:SetCore("SendNotification", {
-                Title = "Security Error",
-                Text = "validation file missing",
+                Title = "error within security",
+                Text = "no validation file found",
                 Duration = 3
             })
         end
         return false, nil, nil
     end
-    local a = readfile('newvape/security/validated')
-    local b, c = pcall(function()
-        return game:GetService("HttpService"):JSONDecode(a)
+    
+    local validationContent = readfile('newvape/security/validated')
+    local success, validationData = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(validationContent)
     end)
-    if not b or not c or not c.username then
+    
+    if not success or not validationData or not validationData.username then
         if not closetMode then
             game.StarterGui:SetCore("SendNotification", {
-                Title = "Security Error",
+                Title = "error within security",
                 Text = "wrong validation data",
                 Duration = 5
             })
         end
         return false, nil, nil
     end
-    return true, c.username, c.guest or false
+    
+    return true, validationData.username, validationData.guest or false
 end
 
-local d, e, f = _1()
-if not d then return end
-shared.ValidatedUsername = e
-shared.IsGuestAccount = f
+local securityPassed, validatedUsername, isGuest = validateSecurity()
+if not securityPassed then
+    return
+end
+
+shared.ValidatedUsername = validatedUsername
+shared.IsGuestAccount = isGuest
 shared.DeviceHWID = shared.DeviceHWID or (isfile('newvape/security/hwid.txt') and readfile('newvape/security/hwid.txt') or "Unknown")
 
-local _2 = {}
-for i = 65, 90 do table.insert(_2, i) end
-for i = 97, 122 do table.insert(_2, i) end
-for i = 48, 57 do table.insert(_2, i) end
-table.insert(_2, 43) table.insert(_2, 47)
+local function decodeBase64(data)
+    local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    data = string.gsub(data, '[^'..b..'=]', '')
+    return (data:gsub('.', function(x)
+        if (x == '=') then return '' end
+        local r,f='',(b:find(x)-1)
+        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
+        return r;
+    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+        if (#x ~= 8) then return '' end
+        local c=0
+        for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
+        return string.char(c)
+    end))
+end
 
-local function _3(g)
-    local h = ""
-    for i = 1, #g do
-        local j = g[i]
-        if j == 61 then break end
-        local k = table.find(_2, j)
-        if k then
-            local l = k - 1
-            h = h .. string.format("%06d", tonumber(string.format("%d", l)))
-        end
+local function getWhitelistUrl()
+    local p1 = "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29t"
+    local p2 = "L3dyZWFsYWVyby93aGl0ZWxpc3RjaGVjay9tYWluL0Fj"
+    local p3 = "Y291bnRTeXN0ZW0ubHVh"
+    return decodeBase64(p1 .. p2 .. p3)
+end
+
+local ACCOUNT_SYSTEM_URL = getWhitelistUrl()
+
+local function checkHWID(account)
+    local hwid = shared.DeviceHWID
+    
+    if account.HWID and account.HWID ~= "" and hwid == account.HWID then
+        return true
     end
-    local m = ""
-    for i = 1, #h, 8 do
-        local n = h:sub(i, i + 7)
-        if #n == 8 then
-            local o = 0
-            for p = 1, 8 do
-                if n:sub(p, p) == "1" then
-                    o = o + 2^(8-p)
-                end
+    
+    if account.AllowedHWIDs and #account.AllowedHWIDs > 0 then
+        for _, allowedHWID in pairs(account.AllowedHWIDs) do
+            if hwid == allowedHWID then
+                return true
             end
-            m = m .. string.char(o)
         end
     end
-    return m
-end
-
-local function _4()
-    local q = "aHR0cHM6Ly9wYXN0ZWJpbi5jb20vcmF3L0N2MmZNeDg5"
-    return _3(q)
-end
-
-local ACCOUNT_SYSTEM_URL = _4()
-
-local function _5(r)
-    local s = shared.DeviceHWID
-    if r.HWID and r.HWID ~= "" and s == r.HWID then return true end
-    if r.AllowedHWIDs and #r.AllowedHWIDs > 0 then
-        for _, t in pairs(r.AllowedHWIDs) do
-            if s == t then return true end
-        end
-    end
+    
     return false
 end
 
-local function _6()
-    if f then return true end
-    local function u()
-        local v, w = pcall(function()
+local function checkAccountActive()
+    if isGuest then return true end
+    
+    local function fetchAccounts()
+        local success, response = pcall(function()
             return game:HttpGet(ACCOUNT_SYSTEM_URL)
         end)
-        if v and w then
-            local x = loadstring(w)()
-            if x and x.Accounts then return x.Accounts end
+        if success and response then
+            local accountsTable = loadstring(response)()
+            if accountsTable and accountsTable.Accounts then
+                return accountsTable.Accounts
+            end
         end
         return nil
     end
-    local y = u()
-    if not y then return true end
-    for _, z in pairs(y) do
-        if z.Username == shared.ValidatedUsername then
-            return z.IsActive == true and _5(z)
+    
+    local accounts = fetchAccounts()
+    if not accounts then 
+        return true 
+    end
+    
+    for _, account in pairs(accounts) do
+        if account.Username == shared.ValidatedUsername then
+            return account.IsActive == true and checkHWID(account)
         end
     end
     return false
 end
 
-local A = false
-local function B()
-    if A or f then return end
-    A = true
+local activeCheckRunning = false
+local function startActiveCheck()
+    if activeCheckRunning or isGuest then return end
+    activeCheckRunning = true
+    
     task.spawn(function()
         while task.wait(30) do
             if shared.vape then
-                local C = _6()
-                if not C then
+                local isActive = checkAccountActive()
+                
+                if not isActive then
                     if not closetMode then
                         game.StarterGui:SetCore("SendNotification", {
-                            Title = "access taken away",
-                            Text = "account deactivated or HWID changed",
+                            Title = "access revoked",
+                            Text = "account deactivated or hwid changed dm aero(5qvx)",
                             Duration = 3
                         })
                     end
+                    
                     task.wait(2)
+                    
                     if shared.vape and shared.vape.Uninject then
                         shared.vape:Uninject()
                     else
@@ -159,9 +168,11 @@ local function B()
                     end
                     break
                 end
-            else break end
+            else
+                break
+            end
         end
-        A = false
+        activeCheckRunning = false
     end)
 end
 
@@ -185,31 +196,23 @@ local cloneref = cloneref or function(obj)
 end
 local playersService = cloneref(game:GetService('Players'))
 
-local D = {100,51,74,101,89,87,119,98,71,56,121,97,87,90,51}
-local E = {84,109,90,48,99,109,56,121,89,87,52,52}
-local function _F(G)
-    local H = ""
-    for I = 1, #G do H = H .. string.char(G[I]) end
-    return H
-end
-local EXPECTED_REPO_OWNER = _F(D)
-local EXPECTED_REPO_NAME = _F(E)
-
-local function downloadFile(J, K)
-	if not isfile(J) then
-		local L, M = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/'..EXPECTED_REPO_OWNER..'/'..EXPECTED_REPO_NAME..'/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, J:gsub('newvape/', '')), true)
+local function downloadFile(path, func)
+	if not isfile(path) then
+		local suc, res = pcall(function()
+			return game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, path:gsub('newvape/', '')), true)
 		end)
-		if not L or M == '404: Not Found' then error(M) end
-		if J:find('.lua') then
-			M = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..M
+		if not suc or res == '404: Not Found' then
+			error(res)
 		end
-		writefile(J, M)
+		if path:find('.lua') then
+			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
+		end
+		writefile(path, res)
 	end
-	return (K or readfile)(J)
+	return (func or readfile)(path)
 end
 
-local function N()
+local function finishLoading()
     vape.Init = nil
     vape:Load()
     task.spawn(function()
@@ -218,34 +221,39 @@ local function N()
             task.wait(10)
         until not vape.Loaded
     end)
-    if not f then B() end
-    local O
+
+    if not isGuest then
+        startActiveCheck()
+    end
+
+    local teleportedServers
     vape:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
-		if (not O) and (not shared.VapeIndependent) then
-			O = true
-			local P = [[
+		if (not teleportedServers) and (not shared.VapeIndependent) then
+			teleportedServers = true
+			local teleportScript = [[
 				shared.vapereload = true
 				if shared.VapeDeveloper then
 					loadstring(readfile('newvape/loader.lua'), 'loader')()
 				else
-					loadstring(game:HttpGet('https://raw.githubusercontent.com/]]..EXPECTED_REPO_OWNER..[[/]]..EXPECTED_REPO_NAME..[[/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true), 'loader')()
+					loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true), 'loader')()
 				end
 			]]
 			if shared.VapeDeveloper then
-				P = 'shared.VapeDeveloper = true\n'..P
+				teleportScript = 'shared.VapeDeveloper = true\n'..teleportScript
 			end
 			if shared.VapeCustomProfile then
-				P = 'shared.VapeCustomProfile = "'..shared.VapeCustomProfile..'"\n'..P
+				teleportScript = 'shared.VapeCustomProfile = "'..shared.VapeCustomProfile..'"\n'..teleportScript
 			end
 			vape:Save()
-			queue_on_teleport(P)
+			queue_on_teleport(teleportScript)
 		end
 	end))
+
     if not shared.vapereload and not closetMode then 
         if not vape.Categories then return end
         if vape.Categories.Main.Options['GUI bind indicator'].Enabled then
-            local Q = f and 'Running as Guest' or 'wsg, '..shared.ValidatedUsername..''
-            vape:CreateNotification('finished Loading', Q..' '..(vape.VapeButton and 'press the button in the top right to open GUI' or 'press '..table.concat(vape.Keybind, ' + '):upper()..' to open gui'), 5)
+            local welcomeMsg = isGuest and 'Running as Guest' or 'Welcome, '..shared.ValidatedUsername..''
+            vape:CreateNotification('Finished Loading', welcomeMsg..' '..(vape.VapeButton and 'Press the button in the top right to open GUI' or 'Press '..table.concat(vape.Keybind, ' + '):upper()..' to open GUI'), 5)
         end
     end
 end
@@ -253,9 +261,12 @@ end
 if not isfile('newvape/profiles/gui.txt') then
 	writefile('newvape/profiles/gui.txt', 'new')
 end
-local R = readfile('newvape/profiles/gui.txt')
-if not isfolder('newvape/assets/'..R) then makefolder('newvape/assets/'..R) end
-vape = loadstring(downloadFile('newvape/guis/'..R..'.lua'), 'gui')()
+local gui = readfile('newvape/profiles/gui.txt')
+
+if not isfolder('newvape/assets/'..gui) then
+	makefolder('newvape/assets/'..gui)
+end
+vape = loadstring(downloadFile('newvape/guis/'..gui..'.lua'), 'gui')()
 shared.vape = vape
 
 if not shared.VapeIndependent then
@@ -264,16 +275,16 @@ if not shared.VapeIndependent then
 		loadstring(readfile('newvape/games/'..game.PlaceId..'.lua'), tostring(game.PlaceId))(options)
 	else
 		if not shared.VapeDeveloper then
-			local S, T = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/'..EXPECTED_REPO_OWNER..'/'..EXPECTED_REPO_NAME..'/'..readfile('newvape/profiles/commit.txt')..'/games/'..game.PlaceId..'.lua', true)
+			local suc, res = pcall(function()
+				return game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/games/'..game.PlaceId..'.lua', true)
 			end)
-			if S and T ~= '404: Not Found' then
+			if suc and res ~= '404: Not Found' then
 				loadstring(downloadFile('newvape/games/'..game.PlaceId..'.lua'), tostring(game.PlaceId))(options)
 			end
 		end
 	end
-	N()
+	finishLoading()
 else
-	vape.Init = N
+	vape.Init = finishLoading
 	return vape
 end
