@@ -5254,6 +5254,11 @@ run(function()
 	local OtherProjectiles
 	local Blacklist
 	local TargetVisualiser
+	local CameraMode
+	local CameraSpeed
+	local CameraSmooth
+	local InfiniteRange
+	local FirstPersonOnly
 	
 	local rayCheck = RaycastParams.new()
 	rayCheck.FilterType = Enum.RaycastFilterType.Include
@@ -5264,9 +5269,15 @@ run(function()
 	local targetOutline = nil
 	local hovering = false
 	local CoreConnections = {}
+	local cameraConnection = nil
 	
 	local UserInputService = game:GetService("UserInputService")
 	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+	local function isFirstPerson()
+		if not (lplr.Character and lplr.Character:FindFirstChild("Head")) then return false end
+		return (lplr.Character.Head.Position - gameCamera.CFrame.Position).Magnitude < 2
+	end
 
 	local function updateOutline(target)
 		if targetOutline then
@@ -5321,8 +5332,79 @@ run(function()
 			if callback then
 				handlePlayerSelection()
 				
+				if CameraMode.Enabled then
+					cameraConnection = runService.Heartbeat:Connect(function(dt)
+						if not entitylib.isAlive then return end
+						
+						if FirstPersonOnly.Enabled and not isFirstPerson() then return end
+						
+						if not store.hand.tool then return end
+						local toolMeta = bedwars.ItemMeta[store.hand.tool.Name]
+						if not toolMeta or not toolMeta.projectileSource then return end
+						
+						local originPos = entitylib.character.RootPart.Position
+						local effectiveRange = InfiniteRange.Enabled and 9999 or Range.Value
+						
+						local plr
+						if selectedTarget and selectedTarget.Character and selectedTarget.Character.PrimaryPart then
+							local dist = (selectedTarget.Character.PrimaryPart.Position - originPos).Magnitude
+							if dist <= effectiveRange then
+								plr = selectedTarget
+							end
+						end
+						
+						if not plr then
+							plr = entitylib.EntityPosition({
+								Range = effectiveRange,
+								Part = TargetPart.Value,
+								Wallcheck = Targets.Walls.Enabled,
+								Players = Targets.Players.Enabled,
+								NPCs = Targets.NPCs.Enabled
+							})
+						end
+						
+						if plr and plr.Character and plr[TargetPart.Value] then
+							local projectileType = toolMeta.projectileSource.projectileType('arrow')
+							local projectileMeta = bedwars.ProjectileMeta[projectileType]
+							local projSpeed = projectileMeta and projectileMeta.speed or 100
+							
+							local targetPos = plr[TargetPart.Value].Position
+							local distance = (targetPos - originPos).Magnitude
+							local timeToTarget = distance / projSpeed
+							
+							local targetVelocity = plr[TargetPart.Value].Velocity
+							local horizontalVelocity = Vector3.new(targetVelocity.X, 0, targetVelocity.Z)
+							local predictedPosition = targetPos + (horizontalVelocity * timeToTarget * 0.8)
+							
+							predictedPosition = Vector3.new(
+								predictedPosition.X,
+								math.min(predictedPosition.Y, targetPos.Y),
+								predictedPosition.Z
+							)
+							
+							local targetCFrame = CFrame.lookAt(gameCamera.CFrame.p, predictedPosition)
+							
+							if CameraSmooth.Value == "Linear" then
+								gameCamera.CFrame = gameCamera.CFrame:Lerp(targetCFrame, CameraSpeed.Value * dt)
+							elseif CameraSmooth.Value == "Elastic" then
+								local lerpAmount = 1 - math.exp(-CameraSpeed.Value * dt)
+								gameCamera.CFrame = gameCamera.CFrame:Lerp(targetCFrame, lerpAmount)
+							elseif CameraSmooth.Value == "Instant" then
+								gameCamera.CFrame = targetCFrame
+							end
+							
+							targetinfo.Targets[plr] = tick() + 1
+						end
+					end)
+					table.insert(CoreConnections, cameraConnection)
+				end
+				
 				old = bedwars.ProjectileController.calculateImportantLaunchValues
 				bedwars.ProjectileController.calculateImportantLaunchValues = function(...)
+					if CameraMode.Enabled then
+						return old(...)
+					end
+					
 					hovering = true
 					local self, projmeta, worldmeta, origin, shootpos = ...
 					local originPos = entitylib.isAlive and (shootpos or entitylib.character.RootPart.Position) or Vector3.zero
@@ -5488,6 +5570,49 @@ run(function()
 		Max = 500,
 		Default = 100,
 		Tooltip = 'Maximum distance for target locking'
+	})
+	CameraMode = ProjectileAimbot:CreateToggle({
+		Name = 'Camera Mode',
+		Default = false,
+		Tooltip = 'Moves your camera/cursor instead of silent aim - looks legit!',
+		Function = function(callback)
+			CameraSpeed.Object.Visible = callback
+			CameraSmooth.Object.Visible = callback
+			InfiniteRange.Object.Visible = callback
+			FirstPersonOnly.Object.Visible = callback
+			
+			if ProjectileAimbot.Enabled then
+				ProjectileAimbot:Toggle()
+				ProjectileAimbot:Toggle()
+			end
+		end
+	})
+	CameraSpeed = ProjectileAimbot:CreateSlider({
+		Name = 'Camera Speed',
+		Min = 1,
+		Max = 20,
+		Default = 8,
+		Visible = false,
+		Tooltip = 'How fast your camera aims at enemies'
+	})
+	CameraSmooth = ProjectileAimbot:CreateDropdown({
+		Name = 'Smooth Mode',
+		List = {'Linear', 'Elastic', 'Instant'},
+		Default = 'Linear',
+		Visible = false,
+		Tooltip = 'Smoothing style for camera movement'
+	})
+	InfiniteRange = ProjectileAimbot:CreateToggle({
+		Name = 'Infinite Range',
+		Default = false,
+		Visible = false,
+		Tooltip = 'Works from any distance (ignores range slider)'
+	})
+	FirstPersonOnly = ProjectileAimbot:CreateToggle({
+		Name = 'First Person Only',
+		Default = false,
+		Visible = false,
+		Tooltip = 'Camera mode only works in first person'
 	})
 	TargetVisualiser = ProjectileAimbot:CreateToggle({
 		Name = "Target Visualiser", 
