@@ -2374,13 +2374,7 @@ run(function()
 	
 	ZoomUncapper = vape.Categories.Render:CreateModule({
 		Name = 'ZoomUncapper',
-		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use ZoomUncapper", 5, "warning")
-				ZoomUncapper:Toggle()
-				return
-			end
-			
+		Function = function(callback)		
 			if callback then
 				oldMaxZoom = lplr.CameraMaxZoomDistance
 				lplr.CameraMaxZoomDistance = ZoomAmount.Value
@@ -2390,7 +2384,7 @@ run(function()
 				end
 			end
 		end,
-		Tooltip = 'Uncaps camera zoom distance\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'Uncaps camera zoom distance'
 	})
 	
 	ZoomAmount = ZoomUncapper:CreateSlider({
@@ -3672,11 +3666,6 @@ run(function()
     Killaura = vape.Categories.Blatant:CreateModule({
         Name = 'Killaura',
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                notif("Account Required", "this feature needd you to be in a  logged in account. Guests cannot use Killaura go use GrandKillaura", 5, "warning")
-                Killaura:Toggle()
-                return
-            end
             
 			if callback then
                 if SophiaCheck and SophiaCheck.Enabled then
@@ -4043,7 +4032,7 @@ run(function()
 				if RangeCirclePart ~= nil then RangeCirclePart:Destroy() end
 			end
         end,
-        Tooltip = 'Attack players around you\nwithout aiming at them.\n[ACCOUNT REQUIRED - NO GUESTS]'
+        Tooltip = 'Attack players around you\nwithout aiming at them.'
     })
 
     pcall(function()
@@ -4356,7 +4345,7 @@ run(function()
     })
     SophiaCheck = Killaura:CreateToggle({
         Name = 'Sophia Check',
-        Tooltip = 'Stops Killaura ONLY when completely frozen (10 frost stacks)',
+        Tooltip = 'Stops Killaura ONLY when completely frozen',
         Function = function(callback)
             if callback then
                 if Killaura.Enabled then
@@ -5179,11 +5168,6 @@ run(function()
     local ProximityPromptDuration = vape.Categories.Utility:CreateModule({
         Name = 'Proximity Prompt Duration',
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use Proximity Prompt Duration", 5, "warning")
-                ProximityPromptDuration:Toggle()
-                return
-            end
             
             if callback then
                 for _, conn in ipairs(moduleData.Connections) do
@@ -5213,7 +5197,7 @@ run(function()
                 moduleData.Connections = {}
             end
         end,
-        Tooltip = 'Set custom duration for all proximity prompts\n[ACCOUNT REQUIRED - NO GUESTS]'
+        Tooltip = 'Set custom duration for all proximity prompts'
     })
     
     local ProximityDurationSlider = ProximityPromptDuration:CreateSlider({
@@ -5552,11 +5536,6 @@ run(function()
 	local cursorRenderConnection
 	local lastGUIState = false
 	
-	local function isDesireUser()
-		local currentUser = shared.ValidatedUsername or "guest"
-		return currentUser == "desire"
-	end
-	
 	local function isFirstPerson()
 		if not (lplr.Character and lplr.Character:FindFirstChild("HumanoidRootPart")) then 
 			return false 
@@ -5712,11 +5691,6 @@ run(function()
 	DesirePA = vape.Categories.Blatant:CreateModule({
 		Name = 'DesirePA',
 		Function = function(callback)
-			if callback and not isDesireUser() then
-				vape:CreateNotification("Access Denied", "This feature is exclusive to 'desire' only.", 5, "warning")
-				DesirePA:Toggle() 
-				return
-			end
 			
 			if callback then
 				if DesirePAHideCursor.Enabled and not cursorRenderConnection then
@@ -5887,7 +5861,7 @@ run(function()
 				end)
 			end
 		end,
-		Tooltip = 'Projectile Aimbot - EXCLUSIVE TO "desire" ONLY'
+		Tooltip = 'Projectile Aimbot'
 	})
 	
 	DesirePATargets = DesirePA:CreateTargets({
@@ -9148,11 +9122,6 @@ run(function()
     AutoCounter = vape.Categories.World:CreateModule({
         Name = 'AutoCounter',
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                notif("Account Required", "This feature needs you to be in a logged in account. Guests cannot use AutoCounter", 5, "warning")
-                AutoCounter:Toggle() 
-                return
-            end
             
             if callback then
                 local counteredTnt = {}
@@ -9234,7 +9203,7 @@ run(function()
                 table.clear(ourTntPositions)
             end
         end,
-        Tooltip = 'Automatically places TNT around enemy TNT - Now with proper team detection!\n[ACCOUNT REQUIRED - NO GUESTS]'
+        Tooltip = 'Automatically places TNT around enemy TNT'
     })
 
     TntCount = AutoCounter:CreateSlider({
@@ -9280,11 +9249,6 @@ run(function()
 	AutoPearl = vape.Categories.Utility:CreateModule({
 		Name = 'AutoPearl',
 		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use AutoPearl", 5, "warning")
-				AutoPearl:Toggle() 
-				return
-			end
 			
 			if callback then
 				local check
@@ -9317,7 +9281,7 @@ run(function()
 				until not AutoPearl.Enabled
 			end
 		end,
-		Tooltip = 'Automatically throws a pearl onto nearby ground after\nfalling a certain distance.\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'Automatically throws a pearl onto nearby ground'
 	})
 	
 	LimitItem = AutoPearl:CreateToggle({
@@ -9420,11 +9384,6 @@ run(function()
 	AutoPlay = vape.Categories.Utility:CreateModule({
 		Name = 'AutoPlay',
 		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use AutoPlay", 5, "warning")
-				AutoPlay:Toggle() 
-				return
-			end
 			
 			if callback then
 				queuedThisMatch = false
@@ -9474,7 +9433,7 @@ run(function()
 				end))
 			end
 		end,
-		Tooltip = 'Automatically queues after match ends. Bypasses AFK detection.\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'Automatically queues after match ends. Bypasses AFK detection'
 	})
 	
 	Random = AutoPlay:CreateToggle({
@@ -9498,11 +9457,6 @@ run(function()
     ProximityMaxDistance = vape.Categories.Utility:CreateModule({
         Name = "ProximityExtender",
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use ProximityExtender", 5, "warning")
-                ProximityMaxDistance:Toggle() 
-                return
-            end
             
             if callback then
                 oldDistances = {}
@@ -9537,7 +9491,7 @@ run(function()
                 oldDistances = {}
             end
         end,
-        Tooltip = "Increases the MaxActivationDistance for all ProximityPrompts in the game\n[ACCOUNT REQUIRED - NO GUESTS]"
+        Tooltip = "Increases the MaxActivationDistance for all ProximityPrompts in the game"
     })
     
     MaxDistance = ProximityMaxDistance:CreateSlider({
@@ -10183,11 +10137,6 @@ run(function()
     ShopTierBypass = vape.Categories.Utility:CreateModule({
         Name = 'Shop Tier Bypass',
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use Shop Tier Bypass", 5, "warning")
-                ShopTierBypass:Toggle() 
-                return
-            end
             
             if callback then
                 repeat task.wait() until store.shopLoaded or not ShopTierBypass.Enabled
@@ -10319,7 +10268,7 @@ run(function()
                 table.clear(highestTierPurchased)
             end
         end,
-        Tooltip = 'Lets you buy things like armor and tools early\n[ACCOUNT REQUIRED - NO GUESTS]'
+        Tooltip = 'Lets you buy things like armor and tools early'
     })
 end)
 	
@@ -10459,11 +10408,6 @@ run(function()
     AutoBuildUp = vape.Categories.World:CreateModule({
         Name = 'AutoBuildUp',
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                notif("Account Required", "this feature needd you to be in a  logged in account. Guests cannot use AutoBuildUp", 5, "warning")
-                AutoBuildUp:Toggle() 
-                return
-            end
             
             if callback then
                 repeat
@@ -10499,7 +10443,7 @@ run(function()
                 until not AutoBuildUp.Enabled
             end
         end,
-        Tooltip = 'Automatically places blocks under you ONLY when jumping (no corner connections)\n[ACCOUNT REQUIRED - NO GUESTS]'
+        Tooltip = 'Automatically places blocks under you ONLY when jumping (no corner connections)'
     })
     
     LimitItem = AutoBuildUp:CreateToggle({
@@ -13087,13 +13031,8 @@ run(function()
     
     GetHost = vape.Categories.Utility:CreateModule({
         Name = "GetHost (Client-Sided)",
-        Tooltip = "Client Sided Host Panel'\n[ACCOUNT REQUIRED - NO GUESTS]",
+        Tooltip = "Client Sided Host Panel",
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use GetHost", 5, "warning")
-                GetHost:Toggle() 
-                return
-            end
             
             if callback then
                 game.Players.LocalPlayer:SetAttribute("CustomMatchRole", "host")
@@ -15085,13 +15024,8 @@ run(function()
     
     MatchHistory = vape.Categories.Utility:CreateModule({
         Name = "ClearMatchHistory",
-        Tooltip = "Resets ur match history\n[ACCOUNT REQUIRED - NO GUESTS]",
+        Tooltip = "Resets ur match history",
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use ClearMatchHistory", 5, "warning")
-                MatchHistory:Toggle() 
-                return
-            end
             
             if callback then 
                 MatchHistory:Toggle(false)
@@ -15437,11 +15371,6 @@ run(function()
 	Clutch = vape.Categories.Utility:CreateModule({
 		Name = 'Clutch',
 		Function = function(call)
-			if call and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use Clutch", 5, "warning")
-				Clutch:Toggle() 
-				return
-			end
 			
 			if call then
 				clutchCount = 0
@@ -15546,7 +15475,7 @@ run(function()
 				end))
 			end
 		end,
-		Tooltip = 'Automatically places a block when falling to clutch\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'Automatically places a block when falling to clutch'
 	})
 
 	UseBlacklisted_Blocks = Clutch:CreateToggle({
@@ -15739,11 +15668,6 @@ run(function()
     InvisibleCursor = vape.Categories.Utility:CreateModule({
         Name = 'InvisibleCursor',
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use InvisibleCursor", 5, "warning")
-                InvisibleCursor:Toggle() 
-                return
-            end
             
             if callback then
                 isActive = true
@@ -15770,7 +15694,7 @@ run(function()
                 end)
             end
         end,
-        Tooltip = 'Hides cursor based on view mode and item settings\n[ACCOUNT REQUIRED - NO GUESTS]'
+        Tooltip = 'Hides cursor based on view mode and item settings'
     })
     
     ViewMode = InvisibleCursor:CreateDropdown({
@@ -16413,11 +16337,6 @@ run(function()
 	FalseBan = vape.Categories.Render:CreateModule({
 		Name = 'FalseBan',
 		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use FalseBan", 5, "warning")
-				FalseBan:Toggle() 
-				return
-			end
 			
 			if callback then
 				for _, player in playersService:GetPlayers() do
@@ -16470,7 +16389,7 @@ run(function()
 				table.clear(CharacterConnections)
 			end
 		end,
-		Tooltip = 'Select a player to make invisible client-side only.\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'Select a player to make invisible client-side only'
 	})
 	
 	PlayerDropdown = FalseBan:CreateDropdown({
@@ -16493,11 +16412,6 @@ run(function()
 	BCR = vape.Categories.Blatant:CreateModule({
 		Name = "BlockCPSRemover",
 		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use BlockCPSRemover", 5, "warning")
-				BCR:Toggle() 
-				return
-			end
 			
 			if callback then
 				task.wait(1)
@@ -16533,7 +16447,7 @@ run(function()
 				end
 			end
 		end,
-		Tooltip = 'Simple CPS modifier\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'Simple CPS modifier'
 	})
 	
 	Value = BCR:CreateSlider({
@@ -17015,11 +16929,6 @@ run(function()
     StaffDetectionSystem = vape.Categories.Utility:CreateModule({
         Name = 'StaffFetcher - Roblox',
         Function = function(enabled)
-            if enabled and shared.IsGuestAccount then
-                vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use StaffFetcher", 5, "warning")
-                StaffDetectionSystem:Toggle() 
-                return
-            end
             
             StaffDetectionSystem.Enabled = enabled
             if enabled then
@@ -17037,7 +16946,7 @@ run(function()
                 end
             end
         end,
-        Tooltip = "Checks for staff presence in Roblox groups\n[ACCOUNT REQUIRED - NO GUESTS]"
+        Tooltip = "Checks for staff presence in Roblox groups"
     })
 
     local StaffDetectionSystemUI = {}
@@ -17294,11 +17203,6 @@ run(function()
 	InfiniteFly = vape.Categories.Blatant:CreateModule({
 		Name = 'InfiniteFly',
 		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use InfiniteFly", 5, "warning")
-				InfiniteFly:Toggle() 
-				return
-			end
 			
 			frictionTable.InfiniteFly = callback or nil
 			updateVelocity()
@@ -17547,7 +17451,7 @@ run(function()
 		ExtraText = function() 
 			return 'Heatseeker' 
 		end,
-		Tooltip = 'Makes you go zoom.\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'Makes you go zoom'
 	})
 	
 	Value = InfiniteFly:CreateSlider({
@@ -17699,11 +17603,6 @@ run(function()
 	LegacyAnimation = vape.Categories.Render:CreateModule({
 		Name = 'LegacyAnimation',
 		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use LegacyAnimation", 5, "warning")
-				LegacyAnimation:Toggle() 
-				return
-			end
 			
 			if callback then
 				ensureAttribute()
@@ -17713,7 +17612,7 @@ run(function()
 				setLegacyAnimation(false)
 			end
 		end,
-		Tooltip = 'Enables Roblox legacy animation blending\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'Enables Roblox legacy animation blending'
 	})
 end)
 
@@ -19284,11 +19183,6 @@ run(function()
 	KaidaKillaura = vape.Categories.Blatant:CreateModule({
 		Name = 'Kaida Killaura',
 		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use Kaida Killaura", 5, "warning")
-				KaidaKillaura:Toggle()
-				return
-			end
 			
 			if callback then
 				if store.equippedKit ~= 'summoner' then
@@ -19432,7 +19326,7 @@ run(function()
 				until not KaidaKillaura.Enabled
 			end
 		end,
-		Tooltip = 'Auto attacks with Summoner claw\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'Auto attacks with Summoner claw'
 	})
 	
 	Targets = KaidaKillaura:CreateTargets({
@@ -19478,11 +19372,6 @@ run(function()
     local OGNametags = vape.Categories.Render:CreateModule({
         Name = "OG Nametags",
         Function = function(callback)
-            if callback and shared.IsGuestAccount then
-                vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use OG Nametags", 5, "warning")
-                OGNametags:Toggle() 
-                return
-            end
             
             if callback then
                 local storedNametags = {}
@@ -19680,7 +19569,7 @@ run(function()
                 table.clear(storedNametags)
             end
         end,
-        Tooltip = "Replaces all nametags with OG BedWars nametags\n[ACCOUNT REQUIRED - NO GUESTS]"
+        Tooltip = "Replaces all nametags with OG BedWars nametags"
     })
 end)
 
@@ -19691,13 +19580,8 @@ run(function()
 	
 	NoNameTag = vape.Categories.Utility:CreateModule({
 		Name = 'NoNameTag',
-		Tooltip = 'Removes your NameTag.\n[ACCOUNT REQUIRED - NO GUESTS]',
+		Tooltip = 'Removes your NameTag',
 		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use NoNameTag", 5, "warning")
-				NoNameTag:Toggle()
-				return
-			end
 			
 			if callback then
 				if entitylib.isAlive and lplr.Character.Head:FindFirstChild('Nametag') then
@@ -19801,11 +19685,6 @@ run(function()
 	AutoEmptyGameTP = vape.Categories.Blatant:CreateModule({
 		Name = 'AutoEmptyGameTP',
 		Function = function(callback)
-			if callback and shared.IsGuestAccount then
-				vape:CreateNotification("Account Required", "This feature needs you to be in a logged in account. Guests cannot use AutoEmptyGameTP", 5, "warning")
-				AutoEmptyGameTP:Toggle()
-				return
-			end
 			
 			if callback then
 				if TeleportOnMatchEnd.Enabled then
@@ -19834,7 +19713,7 @@ run(function()
 				end
 			end
 		end,
-		Tooltip = 'teleports you to an empty\nuseful for resetting match history or farming\n[ACCOUNT REQUIRED - NO GUESTS]'
+		Tooltip = 'teleports you to an empty\nuseful for resetting match history]'
 	})
 	
 	TeleportOnMatchEnd = AutoEmptyGameTP:CreateToggle({
