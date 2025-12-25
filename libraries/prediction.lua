@@ -98,9 +98,9 @@ function module.solveQuartic(c0, c1, c2, c3, c4)
 	r = -(3 / 256) * sq_A * sq_A + 0.0625 * sq_A * B - 0.25 * A * C + D
 
 	if isZero(r) then
-		coeffs[3] = q
-		coeffs[2] = p
-		coeffs[1] = 0
+		coeffs[3] = 0.5 * r * p - 0.125 * q * q
+		coeffs[2] = -r
+		coeffs[1] = -0.5 * p
 		coeffs[0] = 1
 
 		local results = {solveCubic(coeffs[0], coeffs[1], coeffs[2], coeffs[3])}
@@ -173,58 +173,127 @@ function module.solveQuartic(c0, c1, c2, c3, c4)
 	return {s3, s2, s1, s0}
 end
 
-local function predictStrafingMovement(targetPlayer, targetPart, projSpeed, gravity, origin)
+local function predictMovementWithBuilding(targetPlayer, targetPart, projSpeed, gravity, origin, timeToTarget)
 	if not targetPlayer or not targetPlayer.Character or not targetPart then 
 		return targetPart and targetPart.Position or Vector3.zero
 	end
 	
 	local currentPos = targetPart.Position
 	local currentVel = targetPart.Velocity
-	local distance = (currentPos - origin).Magnitude
 	
-	local baseTimeToTarget = distance / projSpeed
-	local velocityMagnitude = Vector3.new(currentVel.X, 0, currentVel.Z).Magnitude
-	local verticalVel = currentVel.Y
+	local isBuilding = false
+	local buildDirection = Vector3.zero
+	local buildSpeed = 0
 	
-	local timeMultiplier = 1.0
-	if distance > 80 then
-		timeMultiplier = 0.95
-	elseif distance > 50 then
-		timeMultiplier = 0.98
-	elseif distance < 20 then
-		timeMultiplier = 1.08
+	local nearbyBlocks = workspace:FindPartsInRegion3(
+		Region3.new(
+			currentPos - Vector3.new(5, 10, 5),
+			currentPos + Vector3.new(5, 10, 5)
+		),
+		nil,
+		50
+	)
+	
+	local upwardPlacement = false
+	for _, block in pairs(nearbyBlocks) do
+		if block.Name:find("wool") or block.Name:find("wood") or block.Name:find("stone") then
+			if block.Position.Y > currentPos.Y + 3 then
+				upwardPlacement = true
+				break
+			end
+		end
 	end
 	
-	local timeToTarget = baseTimeToTarget * timeMultiplier
+	local distance = (currentPos - origin).Magnitude
 	
-	local horizontalPredictionStrength = 0.80
-	if distance > 70 then
-		horizontalPredictionStrength = 0.70
+	local timeMultiplier = 1.0
+	if distance > 100 then
+		timeMultiplier = 0.92
+	elseif distance > 70 then
+		timeMultiplier = 0.95
 	elseif distance > 40 then
-		horizontalPredictionStrength = 0.75
-	elseif distance < 25 then
-		horizontalPredictionStrength = 0.88
+		timeMultiplier = 0.98
+	elseif distance < 20 then
+		timeMultiplier = 1.05
+	elseif distance < 10 then
+		timeMultiplier = 1.10
+	end
+	
+	timeToTarget = timeToTarget or (distance / projSpeed) * timeMultiplier
+	
+	local horizontalPredictionStrength = 0.75
+	if distance > 80 then
+		horizontalPredictionStrength = 0.65
+	elseif distance > 50 then
+		horizontalPredictionStrength = 0.70
+	elseif distance > 30 then
+		horizontalPredictionStrength = 0.78
+	elseif distance < 15 then
+		horizontalPredictionStrength = 0.85
 	end
 	
 	local horizontalVel = Vector3.new(currentVel.X, 0, currentVel.Z)
 	local predictedHorizontal = horizontalVel * timeToTarget * horizontalPredictionStrength
 	
-	local verticalPrediction = 0
-	local isJumping = verticalVel > 10
-	local isFalling = verticalVel < -15
-	local isPeaking = math.abs(verticalVel) < 3 and verticalVel < 1
+	local verticalVel = currentVel.Y
+	local predictedVertical = 0
 	
-	if isFalling then
-		verticalPrediction = verticalVel * timeToTarget * 0.32
+	local isJumping = verticalVel > 12
+	local isFalling = verticalVel < -15
+	local isPeaking = math.abs(verticalVel) < 5 and verticalVel < 2
+	local isHighJump = verticalVel > 25
+	local isLongFall = verticalVel < -30
+	
+	if upwardPlacement then
+		isBuilding = true
+		local buildVelocity = Vector3.new(0, 8, 0) 
+		predictedVertical = buildVelocity.Y * timeToTarget * 0.4
+		
+	elseif isHighJump then
+		predictedVertical = verticalVel * timeToTarget * 0.35
+		
+	elseif isLongFall then
+		predictedVertical = verticalVel * timeToTarget * 0.28
+		
+	elseif isFalling then
+		predictedVertical = verticalVel * timeToTarget * 0.32
+		
 	elseif isJumping then
-		verticalPrediction = verticalVel * timeToTarget * 0.28
+		predictedVertical = verticalVel * timeToTarget * 0.30
+		
 	elseif isPeaking then
-		verticalPrediction = -2 * timeToTarget
+		predictedVertical = -3.5 * timeToTarget
+		
 	else
-		verticalPrediction = verticalVel * timeToTarget * 0.25
+		predictedVertical = verticalVel * timeToTarget * 0.25
 	end
 	
-	local finalPosition = currentPos + predictedHorizontal + Vector3.new(0, verticalPrediction, 0)
+	local heightOffset = 0
+	if distance < 20 then
+		heightOffset = 1.5 
+	elseif distance < 50 then
+		heightOffset = 1.0 
+		heightOffset = 0.5 
+	end
+	
+	local basePrediction = currentPos + predictedHorizontal
+	
+	local verticalOffset = Vector3.new(0, predictedVertical + heightOffset, 0)
+	
+	local finalPosition = basePrediction + verticalOffset
+	
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	raycastParams.FilterDescendantsInstances = {targetPlayer.Character}
+	
+	local groundRay = workspace:Raycast(finalPosition, Vector3.new(0, -10, 0), raycastParams)
+	if groundRay then
+		finalPosition = Vector3.new(
+			finalPosition.X,
+			math.max(finalPosition.Y, groundRay.Position.Y + 2),
+			finalPosition.Z
+		)
+	end
 	
 	return finalPosition
 end
@@ -234,22 +303,33 @@ function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, tar
 	local p, q, r = targetVelocity.X, targetVelocity.Y, targetVelocity.Z
 	local h, j, k = disp.X, disp.Y, disp.Z
 	local l = -.5 * gravity
-	
-	if math.abs(q) > 0.01 and playerGravity and playerGravity > 0 then
+
+	if playerGravity and playerGravity > 0 then
 		local estTime = (disp.Magnitude / projectileSpeed)
 		local origq = q
-		for i = 1, 100 do
+		
+		if playerJump then
+			q = q + playerJump
+		end
+		
+		for i = 1, 50 do
 			q = origq - (.5 * playerGravity) * estTime
-			local velo = targetVelocity * 0.016
-			local ray = workspace:Raycast(Vector3.new(targetPos.X, targetPos.Y, targetPos.Z), 
-				Vector3.new(velo.X, (q * estTime) - playerHeight, velo.Z), params)
+			local velo = targetVelocity * 0.033
+			local ray = workspace:Raycast(
+				Vector3.new(targetPos.X, targetPos.Y, targetPos.Z), 
+				Vector3.new(velo.X, (q * estTime) - playerHeight, velo.Z), 
+				params
+			)
 			
 			if ray then
-				local newTarget = ray.Position + Vector3.new(0, playerHeight, 0)
-				estTime = estTime - math.sqrt(((targetPos - newTarget).Magnitude * 2) / playerGravity)
+				local newTarget = ray.Position + Vector3.new(0, playerHeight + 0.5, 0)
+				local heightDiff = math.abs(targetPos.Y - newTarget.Y)
+				if heightDiff > 5 then
+					estTime = estTime - math.sqrt((heightDiff * 2) / playerGravity)
+				end
 				targetPos = newTarget
 				j = (targetPos - origin).Y
-				q = 0
+				q = q * 0.5
 				break
 			else
 				break
@@ -268,11 +348,11 @@ function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, tar
 	if solutions then
 		local posRoots = {}
 		for _, v in solutions do
-			if v > 0 then
+			if v > 0 and v < 10 then 
 				table.insert(posRoots, v)
 			end
 		end
-		posRoots[1] = posRoots[1]
+		table.sort(posRoots)
 
 		if posRoots[1] then
 			local t = posRoots[1]
@@ -290,6 +370,6 @@ function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, tar
 	end
 end
 
-module.predictStrafingMovement = predictStrafingMovement
+module.predictStrafingMovement = predictMovementWithBuilding
 
 return module
