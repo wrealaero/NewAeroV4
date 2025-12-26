@@ -5254,13 +5254,6 @@ run(function()
 	local OtherProjectiles
 	local Blacklist
 	local TargetVisualiser
-	local CameraMode
-	local CameraSpeed
-	local CameraSmooth
-	local InfiniteRange
-	local FirstPersonOnly
-	local VerticalPrediction
-	local BuildingPrediction
 	
 	local rayCheck = RaycastParams.new()
 	rayCheck.FilterType = Enum.RaycastFilterType.Include
@@ -5271,15 +5264,9 @@ run(function()
 	local targetOutline = nil
 	local hovering = false
 	local CoreConnections = {}
-	local cameraConnection = nil
 	
 	local UserInputService = game:GetService("UserInputService")
 	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-
-	local function isFirstPerson()
-		if not (lplr.Character and lplr.Character:FindFirstChild("Head")) then return false end
-		return (lplr.Character.Head.Position - gameCamera.CFrame.Position).Magnitude < 2
-	end
 
 	local function updateOutline(target)
 		if targetOutline then
@@ -5297,6 +5284,7 @@ run(function()
 	end
 
 	local function handlePlayerSelection()
+		local mouse = lplr:GetMouse()
 		local function selectTarget(target)
 			if not target then return end
 			if target and target.Parent then
@@ -5328,250 +5316,17 @@ run(function()
 		end
 	end
 	
-	local jumpHistory = {}
-	local lastPositions = {}
-	
-	local function updateJumpHistory(plr, currentPos, currentVel, currentTime)
-		local playerId = plr.Player and plr.Player.UserId or "npc"
-		
-		if not jumpHistory[playerId] then
-			jumpHistory[playerId] = {
-				jumpTimes = {},
-				peakHeights = {},
-				lastJumpTime = 0,
-				isJumping = false,
-				jumpStartY = 0,
-				peakY = 0
-			}
-			lastPositions[playerId] = {}
-		end
-		
-		local history = jumpHistory[playerId]
-		
-		table.insert(lastPositions[playerId], {
-			time = currentTime,
-			position = currentPos,
-			velocity = currentVel
-		})
-		
-		while #lastPositions[playerId] > 5 do
-			table.remove(lastPositions[playerId], 1)
-		end
-		
-		local verticalVel = currentVel.Y
-		local isOnGround = verticalVel == 0 or math.abs(verticalVel) < 2
-		
-		if verticalVel > 25 then
-			history.isJumping = true
-			history.jumpStartY = currentPos.Y
-			history.lastJumpTime = currentTime
-		elseif verticalVel < -20 and history.isJumping then
-			if currentPos.Y > history.peakY then
-				history.peakY = currentPos.Y
-			end
-		elseif isOnGround and history.isJumping then
-			history.isJumping = false
-			table.insert(history.jumpTimes, currentTime - history.lastJumpTime)
-			table.insert(history.peakHeights, history.peakY - history.jumpStartY)
-			history.peakY = 0
-			
-			while #history.jumpTimes > 3 do table.remove(history.jumpTimes, 1) end
-			while #history.peakHeights > 3 do table.remove(history.peakHeights, 1) end
-		end
-		
-		return history
-	end
-	
-	local function predictJumpMovement(plr, targetPart, distance, timeToTarget, currentTime)
-		if not VerticalPrediction.Enabled then return Vector3.zero end
-		
-		local playerId = plr.Player and plr.Player.UserId or "npc"
-		local history = jumpHistory[playerId]
-		local currentVel = targetPart.Velocity
-		local verticalVel = currentVel.Y
-		
-		if not history or #lastPositions[playerId] < 2 then
-			return Vector3.zero
-		end
-		
-		local jumpPrediction = Vector3.zero
-		
-		if verticalVel > 30 then
-			local jumpPower = math.min(verticalVel / 50, 1.5)
-			local predictionFactor = 0.18 + (distance / 200) * 0.1
-			jumpPrediction = Vector3.new(0, verticalVel * timeToTarget * predictionFactor * jumpPower, 0)
-			
-		elseif verticalVel > 15 then
-			local predictionFactor = 0.15 + (distance / 200) * 0.08
-			jumpPrediction = Vector3.new(0, verticalVel * timeToTarget * predictionFactor, 0)
-			
-		elseif verticalVel < -25 then
-			local fallFactor = 0.12 + (distance / 200) * 0.06
-			jumpPrediction = Vector3.new(0, verticalVel * timeToTarget * fallFactor, 0)
-			
-		elseif verticalVel < -10 then
-			local fallFactor = 0.08 + (distance / 200) * 0.04
-			jumpPrediction = Vector3.new(0, verticalVel * timeToTarget * fallFactor, 0)
-			
-		elseif history.isJumping then
-			local timeSinceJump = currentTime - history.lastJumpTime
-			if timeSinceJump < 0.3 then
-				jumpPrediction = Vector3.new(0, 20 * timeToTarget * 0.1, 0)
-			else
-				jumpPrediction = Vector3.new(0, -15 * timeToTarget * 0.08, 0)
-			end
-		end
-		
-		return jumpPrediction
-	end
-	
-	local function predictBuildingMovement(plr, targetPart, distance, timeToTarget)
-		if not BuildingPrediction.Enabled then return Vector3.zero end
-		
-		local buildingPrediction = Vector3.zero
-		local currentPos = targetPart.Position
-		
-		local region = Region3.new(
-			currentPos - Vector3.new(6, 15, 6),
-			currentPos + Vector3.new(6, 15, 6)
-		)
-		
-		local parts = workspace:FindPartsInRegion3WithWhiteList(region, {}, 30)
-		
-		local upwardBlocks = 0
-		for _, block in pairs(parts) do
-			if (block.Name:find("wool") or block.Name:find("wood") or block.Name:find("stone") or 
-				block.Name:find("glass") or block.Name:find("clay") or block.Name:find("obsidian")) and 
-			   block.Position.Y > currentPos.Y + 2 then
-				upwardBlocks = upwardBlocks + 1
-			end
-		end
-		
-		if upwardBlocks > 0 then
-			local buildSpeed = 0
-			if distance < 30 then
-				buildSpeed = 8
-			elseif distance < 60 then
-				buildSpeed = 5
-			else
-				buildSpeed = 3
-			end
-			
-			buildingPrediction = Vector3.new(0, buildSpeed * timeToTarget * 0.2, 0)
-		end
-		
-		return buildingPrediction
-	end
-	
 	local ProjectileAimbot = vape.Categories.Blatant:CreateModule({
 		Name = 'ProjectileAimbot',
 		Function = function(callback)
 			if callback then
 				handlePlayerSelection()
 				
-				if CameraMode.Enabled then
-					cameraConnection = runService.Heartbeat:Connect(function(dt)
-						if not entitylib.isAlive then return end
-						
-						if FirstPersonOnly.Enabled and not isFirstPerson() then return end
-						
-						if not store.hand.tool then return end
-						local toolMeta = bedwars.ItemMeta[store.hand.tool.Name]
-						if not toolMeta or not toolMeta.projectileSource then return end
-						
-						local originPos = entitylib.character.RootPart.Position
-						local effectiveRange = InfiniteRange.Enabled and 9999 or Range.Value
-						local currentTime = tick()
-						
-						local plr
-						if selectedTarget and selectedTarget.Character and selectedTarget.Character.PrimaryPart then
-							local dist = (selectedTarget.Character.PrimaryPart.Position - originPos).Magnitude
-							if dist <= effectiveRange then
-								plr = selectedTarget
-							end
-						end
-						
-						if not plr then
-							plr = entitylib.EntityPosition({
-								Range = effectiveRange,
-								Part = TargetPart.Value,
-								Wallcheck = Targets.Walls.Enabled,
-								Players = Targets.Players.Enabled,
-								NPCs = Targets.NPCs.Enabled
-							})
-						end
-						
-						if plr and plr.Character and plr[TargetPart.Value] then
-							local projectileType = toolMeta.projectileSource.projectileType('arrow')
-							local projectileMeta = bedwars.ProjectileMeta[projectileType]
-							local projSpeed = projectileMeta and projectileMeta.speed or 100
-							
-							local targetPos = plr[TargetPart.Value].Position
-							local targetVel = plr[TargetPart.Value].Velocity
-							local distance = (targetPos - originPos).Magnitude
-							local timeToTarget = distance / projSpeed
-							
-							updateJumpHistory(plr, targetPos, targetVel, currentTime)
-							
-							local predictedPosition = prediction.predictStrafingMovement(
-								plr.Player, 
-								plr[TargetPart.Value], 
-								projSpeed, 
-								196.2,
-								originPos,
-								timeToTarget
-							)
-							
-							local jumpPrediction = predictJumpMovement(plr, plr[TargetPart.Value], distance, timeToTarget, currentTime)
-							predictedPosition = predictedPosition + jumpPrediction
-							
-							if BuildingPrediction.Enabled then
-								local buildingPred = predictBuildingMovement(plr.Player, plr[TargetPart.Value], distance, timeToTarget)
-								predictedPosition = predictedPosition + buildingPred
-							end
-							
-							local groundCheck = workspace:Raycast(
-								predictedPosition + Vector3.new(0, 5, 0),
-								Vector3.new(0, -20, 0),
-								rayCheck
-							)
-							
-							if groundCheck then
-								local groundHeight = groundCheck.Position.Y
-								predictedPosition = Vector3.new(
-									predictedPosition.X,
-									math.max(predictedPosition.Y, groundHeight + 2.5),
-									predictedPosition.Z
-								)
-							end
-							
-							local targetCFrame = CFrame.lookAt(gameCamera.CFrame.p, predictedPosition)
-							
-							if CameraSmooth.Value == "Linear" then
-								gameCamera.CFrame = gameCamera.CFrame:Lerp(targetCFrame, CameraSpeed.Value * dt * 0.1)
-							elseif CameraSmooth.Value == "Elastic" then
-								local lerpAmount = 1 - math.exp(-CameraSpeed.Value * dt * 0.5)
-								gameCamera.CFrame = gameCamera.CFrame:Lerp(targetCFrame, lerpAmount)
-							elseif CameraSmooth.Value == "Instant" then
-								gameCamera.CFrame = targetCFrame
-							end
-							
-							targetinfo.Targets[plr] = tick() + 1
-						end
-					end)
-					table.insert(CoreConnections, cameraConnection)
-				end
-				
 				old = bedwars.ProjectileController.calculateImportantLaunchValues
 				bedwars.ProjectileController.calculateImportantLaunchValues = function(...)
-					if CameraMode.Enabled then
-						return old(...)
-					end
-					
 					hovering = true
 					local self, projmeta, worldmeta, origin, shootpos = ...
 					local originPos = entitylib.isAlive and (shootpos or entitylib.character.RootPart.Position) or Vector3.zero
-					local currentTime = tick()
 					
 					local plr
 					if selectedTarget and selectedTarget.Character and (selectedTarget.Character.PrimaryPart.Position - originPos).Magnitude <= Range.Value then
@@ -5614,10 +5369,10 @@ run(function()
 						local playerGravity = workspace.Gravity
 	
 						if balloons and balloons > 0 then
-							playerGravity = workspace.Gravity * (1 - (balloons * 0.05))
+							playerGravity = (workspace.Gravity * (1 - ((balloons >= 4 and 1.2 or balloons >= 3 and 1 or 0.975))))
 						end
 	
-						if plr.Character and plr.Character.PrimaryPart and plr.Character.PrimaryPart:FindFirstChild('rbxassetid://8200754399') then
+						if plr.Character.PrimaryPart:FindFirstChild('rbxassetid://8200754399') then
 							playerGravity = 6
 						end
 
@@ -5630,112 +5385,46 @@ run(function()
 							end
 						end
 
-						local distance = (plr[TargetPart.Value].Position - offsetpos).Magnitude
-						local timeToTarget = distance / projSpeed
-						
-						local targetPos = plr[TargetPart.Value].Position
-						local targetVel = plr[TargetPart.Value].Velocity
-						updateJumpHistory(plr, targetPos, targetVel, currentTime)
-						
-						local predictedPosition = prediction.predictStrafingMovement(
-							plr.Player, 
-							plr[TargetPart.Value], 
-							projSpeed, 
-							gravity,
-							offsetpos,
-							timeToTarget
-						)
-						
-						local jumpPrediction = predictJumpMovement(plr, plr[TargetPart.Value], distance, timeToTarget, currentTime)
-						predictedPosition = predictedPosition + jumpPrediction
-						
-						if BuildingPrediction.Enabled then
-							local buildingPred = predictBuildingMovement(plr.Player, plr[TargetPart.Value], distance, timeToTarget)
-							predictedPosition = predictedPosition + buildingPred
-						end
-						
-						local groundCheck = workspace:Raycast(
-							predictedPosition + Vector3.new(0, 5, 0),
-							Vector3.new(0, -15, 0),
-							rayCheck
-						)
-						
-						if groundCheck then
-							local groundHeight = groundCheck.Position.Y
-							predictedPosition = Vector3.new(
-								predictedPosition.X,
-								math.max(predictedPosition.Y, groundHeight + 3),
-								predictedPosition.Z
-							)
-						end
-						
-						local ceilingCheck = workspace:Raycast(
-							predictedPosition,
-							Vector3.new(0, 10, 0),
-							rayCheck
-						)
-						
-						if ceilingCheck then
-							predictedPosition = Vector3.new(
-								predictedPosition.X,
-								math.min(predictedPosition.Y, ceilingCheck.Position.Y - 1),
-								predictedPosition.Z
-							)
-						end
-						
-						local smoothnessFactor = 0.8
-						if distance > 80 then
-							smoothnessFactor = 0.65
-						elseif distance > 50 then
-							smoothnessFactor = 0.72
-						elseif distance > 30 then
-							smoothnessFactor = 0.78
-						elseif distance < 15 then
-							smoothnessFactor = 0.88
-						end
-						
-						local smoothLook = CFrame.new(offsetpos, predictedPosition)
-						
-						if projmeta.projectile ~= 'owl_projectile' then
-							smoothLook = smoothLook * CFrame.new(
-								bedwars.BowConstantsTable.RelX or 0,
-								bedwars.BowConstantsTable.RelY or 0,
-								bedwars.BowConstantsTable.RelZ or 0
-							)
-						end
-
-						local targetVelocity = projmeta.projectile == 'telepearl' and Vector3.zero or plr[TargetPart.Value].Velocity
-						
-						local calc = prediction.SolveTrajectory(
-							smoothLook.p, 
-							projSpeed, 
-							gravity, 
-							predictedPosition, 
-							targetVelocity, 
-							playerGravity, 
-							plr.HipHeight + 2.5,
-							plr.Jumping and 50 or nil,
-							rayCheck
-						)
-						
-						if calc then
-							local finalDirection = (calc - smoothLook.p).Unit
-							local angleFromHorizontal = math.acos(math.clamp(finalDirection:Dot(Vector3.new(0, 1, 0)), -1, 1))
-							
-							local minAngle = math.rad(1)
-							local maxAngle = math.rad(179)
-							
-							if angleFromHorizontal > minAngle and angleFromHorizontal < maxAngle then
-								targetinfo.Targets[plr] = tick() + 1
-								hovering = false
+						if store.hand and store.hand.tool then
+							if store.hand.tool.Name:find("spellbook") then
+								local targetPos = plr.RootPart.Position
+								local selfPos = lplr.Character.PrimaryPart.Position
+								local expectedTime = (selfPos - targetPos).Magnitude / 160
+								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
 								return {
-									initialVelocity = finalDirection * projSpeed,
+									initialVelocity = (targetPos - selfPos).Unit * 160,
 									positionFrom = offsetpos,
-									deltaT = lifetime,
-									gravitationalAcceleration = gravity,
+									deltaT = 2,
+									gravitationalAcceleration = 1,
+									drawDurationSeconds = 5
+								}
+							elseif store.hand.tool.Name:find("chakram") then
+								local targetPos = plr.RootPart.Position
+								local selfPos = lplr.Character.PrimaryPart.Position
+								local expectedTime = (selfPos - targetPos).Magnitude / 80
+								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
+								return {
+									initialVelocity = (targetPos - selfPos).Unit * 80,
+									positionFrom = offsetpos,
+									deltaT = 2,
+									gravitationalAcceleration = 1,
 									drawDurationSeconds = 5
 								}
 							end
+						end
+	
+						local newlook = CFrame.new(offsetpos, plr[TargetPart.Value].Position) * CFrame.new(projmeta.projectile == 'owl_projectile' and Vector3.zero or Vector3.new(bedwars.BowConstantsTable.RelX, bedwars.BowConstantsTable.RelY, bedwars.BowConstantsTable.RelZ))
+						local calc = prediction.SolveTrajectory(newlook.p, projSpeed, gravity, plr[TargetPart.Value].Position, projmeta.projectile == 'telepearl' and Vector3.zero or plr[TargetPart.Value].Velocity, playerGravity, plr.HipHeight, plr.Jumping and 42.6 or nil, rayCheck)
+						if calc then
+							targetinfo.Targets[plr] = tick() + 1
+							hovering = false
+							return {
+								initialVelocity = CFrame.new(newlook.Position, calc).LookVector * projSpeed,
+								positionFrom = offsetpos,
+								deltaT = lifetime,
+								gravitationalAcceleration = gravity,
+								drawDurationSeconds = 5
+							}
 						end
 					end
 	
@@ -5753,8 +5442,6 @@ run(function()
 					pcall(function() v:Disconnect() end)
 				end
 				table.clear(CoreConnections)
-				table.clear(jumpHistory)
-				table.clear(lastPositions)
 			end
 		end,
 		Tooltip = 'Silently adjusts your aim towards the enemy. Click a player to lock onto them (red outline).'
@@ -5780,59 +5467,6 @@ run(function()
 		Max = 500,
 		Default = 100,
 		Tooltip = 'Maximum distance for target locking'
-	})
-	VerticalPrediction = ProjectileAimbot:CreateToggle({
-		Name = 'Vertical Prediction',
-		Default = true,
-		Tooltip = 'Predict vertical movement (jumping/falling)'
-	})
-	BuildingPrediction = ProjectileAimbot:CreateToggle({
-		Name = 'Building Prediction',
-		Default = true,
-		Tooltip = 'Predict when enemies are building upward'
-	})
-	CameraMode = ProjectileAimbot:CreateToggle({
-		Name = 'Camera Mode',
-		Default = false,
-		Tooltip = 'Moves your camera/cursor instead of silent aim - looks legit!',
-		Function = function(callback)
-			CameraSpeed.Object.Visible = callback
-			CameraSmooth.Object.Visible = callback
-			InfiniteRange.Object.Visible = callback
-			FirstPersonOnly.Object.Visible = callback
-			
-			if ProjectileAimbot.Enabled then
-				ProjectileAimbot:Toggle()
-				ProjectileAimbot:Toggle()
-			end
-		end
-	})
-	CameraSpeed = ProjectileAimbot:CreateSlider({
-		Name = 'Camera Speed',
-		Min = 1,
-		Max = 20,
-		Default = 8,
-		Visible = false,
-		Tooltip = 'How fast your camera aims at enemies'
-	})
-	CameraSmooth = ProjectileAimbot:CreateDropdown({
-		Name = 'Smooth Mode',
-		List = {'Linear', 'Elastic', 'Instant'},
-		Default = 'Linear',
-		Visible = false,
-		Tooltip = 'Smoothing style for camera movement'
-	})
-	InfiniteRange = ProjectileAimbot:CreateToggle({
-		Name = 'Infinite Range',
-		Default = false,
-		Visible = false,
-		Tooltip = 'Works from any distance (ignores range slider)'
-	})
-	FirstPersonOnly = ProjectileAimbot:CreateToggle({
-		Name = 'First Person Only',
-		Default = false,
-		Visible = false,
-		Tooltip = 'Camera mode only works in first person'
 	})
 	TargetVisualiser = ProjectileAimbot:CreateToggle({
 		Name = "Target Visualiser", 
@@ -10594,6 +10228,7 @@ run(function()
 	local LimitItem
 	local InstantSuffocate
 	local SmartMode
+	local RequireMouseDown 
 	
 	local function fixPosition(pos)
 		return bedwars.BlockController:getBlockPosition(pos) * 3
@@ -10703,6 +10338,11 @@ run(function()
 		Function = function(callback)
 			if callback then
 				repeat
+					if RequireMouseDown.Enabled and not inputService:IsMouseButtonPressed(0) then
+						task.wait(0.05)
+						continue
+					end
+					
 					local item = store.hand.toolType == 'block' and store.hand.tool.Name or not LimitItem.Enabled and getWool()
 	
 					if item then
@@ -10738,6 +10378,7 @@ run(function()
 		end,
 		Tooltip = 'Places blocks on nearby confined entities'
 	})
+	
 	Range = AutoSuffocate:CreateSlider({
 		Name = 'Range',
 		Min = 1,
@@ -10748,23 +10389,32 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
+	
 	SmartMode = AutoSuffocate:CreateToggle({
 		Name = 'Smart Mode',
 		Default = true,
 		Tooltip = 'Detects scenarios: walls, void, corners, open areas'
 	})
+	
 	LimitItem = AutoSuffocate:CreateToggle({
 		Name = 'Limit to Items',
 		Default = true,
 		Function = function() end
 	})
+	
 	InstantSuffocate = AutoSuffocate:CreateToggle({
 		Name = 'Instant Suffocate',
 		Function = function() end,
 		Tooltip = 'Instantly places all suffocation blocks instead of one at a time'
 	})
+	
+	RequireMouseDown = AutoSuffocate:CreateToggle({
+		Name = 'Require Mouse Down',
+		Default = false,
+		Function = function() end,
+		Tooltip = 'Requires left mouse button to be held down to activate'
+	})
 end)
-
 	
 run(function()
 	local AutoTool
