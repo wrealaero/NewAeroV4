@@ -870,10 +870,6 @@ run(function()
 		return getBlockHealth(block, bedwars.BlockController:getBlockPosition(blockpos)) / tool
 	end
 
-	--[[
-		Pathfinding using a luau version of dijkstra's algorithm
-		Source: https://stackoverflow.com/questions/39355587/speeding-up-dijkstras-algorithm-to-solve-a-3d-maze
-	]]
 	local function calculatePath(target, blockpos)
 		if cache[blockpos] then
 			return unpack(cache[blockpos])
@@ -5305,7 +5301,7 @@ run(function()
 		if isMobile then
 			con = UserInputService.TouchTapInWorld:Connect(function(touchPos)
 				if not hovering then updateOutline(nil); return end
-				if not ProjectileAimbot.Enabled then pcall(function() con:Disconnect() end); updateOutline(nil); return end
+				if not AeroPA.Enabled then pcall(function() con:Disconnect() end); updateOutline(nil); return end
 				local ray = workspace.CurrentCamera:ScreenPointToRay(touchPos.X, touchPos.Y)
 				local result = workspace:Raycast(ray.Origin, ray.Direction * 1000)
 				if result and result.Instance then
@@ -5316,7 +5312,245 @@ run(function()
 		end
 	end
 	
-	local ProjectileAimbot = vape.Categories.Blatant:CreateModule({
+	local aeroprediction = {
+		SolveTrajectory = function(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params)
+			local eps = 1e-9
+			
+			local function isZero(d)
+				return (d > -eps and d < eps)
+			end
+
+			local function cuberoot(x)
+				return (x > 0) and math.pow(x, (1 / 3)) or -math.pow(math.abs(x), (1 / 3))
+			end
+
+			local function solveQuadric(c0, c1, c2)
+				local s0, s1
+				local p, q, D
+				p = c1 / (2 * c0)
+				q = c2 / c0
+				D = p * p - q
+
+				if isZero(D) then
+					s0 = -p
+					return s0
+				elseif (D < 0) then
+					return
+				else
+					local sqrt_D = math.sqrt(D)
+					s0 = sqrt_D - p
+					s1 = -sqrt_D - p
+					return s0, s1
+				end
+			end
+
+			local function solveCubic(c0, c1, c2, c3)
+				local s0, s1, s2
+				local num, sub
+				local A, B, C
+				local sq_A, p, q
+				local cb_p, D
+
+				if c0 == 0 then
+					return solveQuadric(c1, c2, c3)
+				end
+
+				A = c1 / c0
+				B = c2 / c0
+				C = c3 / c0
+				sq_A = A * A
+				p = (1 / 3) * (-(1 / 3) * sq_A + B)
+				q = 0.5 * ((2 / 27) * A * sq_A - (1 / 3) * A * B + C)
+				cb_p = p * p * p
+				D = q * q + cb_p
+
+				if isZero(D) then
+					if isZero(q) then
+						s0 = 0
+						num = 1
+					else
+						local u = cuberoot(-q)
+						s0 = 2 * u
+						s1 = -u
+						num = 2
+					end
+				elseif (D < 0) then
+					local phi = (1 / 3) * math.acos(-q / math.sqrt(-cb_p))
+					local t = 2 * math.sqrt(-p)
+					s0 = t * math.cos(phi)
+					s1 = -t * math.cos(phi + math.pi / 3)
+					s2 = -t * math.cos(phi - math.pi / 3)
+					num = 3
+				else
+					local sqrt_D = math.sqrt(D)
+					local u = cuberoot(sqrt_D - q)
+					local v = -cuberoot(sqrt_D + q)
+					s0 = u + v
+					num = 1
+				end
+
+				sub = (1 / 3) * A
+				if (num > 0) then s0 = s0 - sub end
+				if (num > 1) then s1 = s1 - sub end
+				if (num > 2) then s2 = s2 - sub end
+
+				return s0, s1, s2
+			end
+
+			local function solveQuartic(c0, c1, c2, c3, c4)
+				local s0, s1, s2, s3
+				local coeffs = {}
+				local z, u, v, sub
+				local A, B, C, D
+				local sq_A, p, q, r
+				local num
+
+				A = c1 / c0
+				B = c2 / c0
+				C = c3 / c0
+				D = c4 / c0
+
+				sq_A = A * A
+				p = -0.375 * sq_A + B
+				q = 0.125 * sq_A * A - 0.5 * A * B + C
+				r = -(3 / 256) * sq_A * sq_A + 0.0625 * sq_A * B - 0.25 * A * C + D
+
+				if isZero(r) then
+					coeffs[3] = q
+					coeffs[2] = p
+					coeffs[1] = 0
+					coeffs[0] = 1
+
+					local results = {solveCubic(coeffs[0], coeffs[1], coeffs[2], coeffs[3])}
+					num = #results
+					s0, s1, s2 = results[1], results[2], results[3]
+				else
+					coeffs[3] = 0.5 * r * p - 0.125 * q * q
+					coeffs[2] = -r
+					coeffs[1] = -0.5 * p
+					coeffs[0] = 1
+
+					s0, s1, s2 = solveCubic(coeffs[0], coeffs[1], coeffs[2], coeffs[3])
+					z = s0
+
+					u = z * z - r
+					v = 2 * z - p
+
+					if isZero(u) then
+						u = 0
+					elseif (u > 0) then
+						u = math.sqrt(u)
+					else
+						return
+					end
+					if isZero(v) then
+						v = 0
+					elseif (v > 0) then
+						v = math.sqrt(v)
+					else
+						return
+					end
+
+					coeffs[2] = z - u
+					coeffs[1] = q < 0 and -v or v
+					coeffs[0] = 1
+
+					local results = {solveQuadric(coeffs[0], coeffs[1], coeffs[2])}
+					num = #results
+					s0, s1 = results[1], results[2]
+
+					coeffs[2] = z + u
+					coeffs[1] = q < 0 and v or -v
+					coeffs[0] = 1
+
+					if (num == 0) then
+						local results2 = {solveQuadric(coeffs[0], coeffs[1], coeffs[2])}
+						num = num + #results2
+						s0, s1 = results2[1], results2[2]
+					end
+					if (num == 1) then
+						local results2 = {solveQuadric(coeffs[0], coeffs[1], coeffs[2])}
+						num = num + #results2
+						s1, s2 = results2[1], results2[2]
+					end
+					if (num == 2) then
+						local results2 = {solveQuadric(coeffs[0], coeffs[1], coeffs[2])}
+						num = num + #results2
+						s2, s3 = results2[1], results2[2]
+					end
+				end
+
+				sub = 0.25 * A
+				if (num > 0) then s0 = s0 - sub end
+				if (num > 1) then s1 = s1 - sub end
+				if (num > 2) then s2 = s2 - sub end
+				if (num > 3) then s3 = s3 - sub end
+
+				return {s3, s2, s1, s0}
+			end
+
+			local disp = targetPos - origin
+			local p, q, r = targetVelocity.X, targetVelocity.Y, targetVelocity.Z
+			local h, j, k = disp.X, disp.Y, disp.Z
+			local l = -.5 * gravity
+
+			if math.abs(q) > 0.01 and playerGravity and playerGravity > 0 then
+				local estTime = (disp.Magnitude / projectileSpeed)
+				local origq = q
+				for i = 1, 100 do
+					q = origq - (.5 * playerGravity) * estTime
+					local velo = targetVelocity * 0.016
+					local ray = workspace:Raycast(Vector3.new(targetPos.X, targetPos.Y, targetPos.Z), 
+						Vector3.new(velo.X, (q * estTime) - playerHeight, velo.Z), params)
+					
+					if ray then
+						local newTarget = ray.Position + Vector3.new(0, playerHeight, 0)
+						estTime = estTime - math.sqrt(((targetPos - newTarget).Magnitude * 2) / playerGravity)
+						targetPos = newTarget
+						j = (targetPos - origin).Y
+						q = 0
+						break
+					else
+						break
+					end
+				end
+			end
+
+			local solutions = solveQuartic(
+				l*l,
+				-2*q*l,
+				q*q - 2*j*l - projectileSpeed*projectileSpeed + p*p + r*r,
+				2*j*q + 2*h*p + 2*k*r,
+				j*j + h*h + k*k
+			)
+			
+			if solutions then
+				local posRoots = {}
+				for _, v in solutions do
+					if v > 0 then
+						table.insert(posRoots, v)
+					end
+				end
+				posRoots[1] = posRoots[1]
+
+				if posRoots[1] then
+					local t = posRoots[1]
+					local d = (h + p*t)/t
+					local e = (j + q*t - l*t*t)/t
+					local f = (k + r*t)/t
+					return origin + Vector3.new(d, e, f)
+				end
+			elseif gravity == 0 then
+				local t = (disp.Magnitude / projectileSpeed)
+				local d = (h + p*t)/t
+				local e = (j + q*t - l*t*t)/t
+				local f = (k + r*t)/t
+				return origin + Vector3.new(d, e, f)
+			end
+		end
+	}
+	
+	local AeroPA = vape.Categories.Blatant:CreateModule({
 		Name = 'ProjectileAimbot',
 		Function = function(callback)
 			if callback then
@@ -5414,9 +5648,14 @@ run(function()
 						end
 	
 						local newlook = CFrame.new(offsetpos, plr[TargetPart.Value].Position) * CFrame.new(projmeta.projectile == 'owl_projectile' and Vector3.zero or Vector3.new(bedwars.BowConstantsTable.RelX, bedwars.BowConstantsTable.RelY, bedwars.BowConstantsTable.RelZ))
-						local calc = prediction.SolveTrajectory(newlook.p, projSpeed, gravity, plr[TargetPart.Value].Position, projmeta.projectile == 'telepearl' and Vector3.zero or plr[TargetPart.Value].Velocity, playerGravity, plr.HipHeight, plr.Jumping and 42.6 or nil, rayCheck)
+						
+						local targetVelocity = projmeta.projectile == 'telepearl' and Vector3.zero or plr[TargetPart.Value].Velocity
+						local calc = aeroprediction.SolveTrajectory(newlook.p, projSpeed, gravity, plr[TargetPart.Value].Position, targetVelocity, playerGravity, plr.HipHeight, plr.Jumping and 50 or nil, rayCheck)
+						
 						if calc then
-							targetinfo.Targets[plr] = tick() + 1
+							if targetinfo and targetinfo.Targets then
+								targetinfo.Targets[plr] = tick() + 1
+							end
 							hovering = false
 							return {
 								initialVelocity = CFrame.new(newlook.Position, calc).LookVector * projSpeed,
@@ -5447,32 +5686,32 @@ run(function()
 		Tooltip = 'Silently adjusts your aim towards the enemy. Click a player to lock onto them (red outline).'
 	})
 	
-	Targets = ProjectileAimbot:CreateTargets({
+	Targets = AeroPA:CreateTargets({
 		Players = true,
 		Walls = true
 	})
-	TargetPart = ProjectileAimbot:CreateDropdown({
+	TargetPart = AeroPA:CreateDropdown({
 		Name = 'Part',
 		List = {'RootPart', 'Head'}
 	})
-	FOV = ProjectileAimbot:CreateSlider({
+	FOV = AeroPA:CreateSlider({
 		Name = 'FOV',
 		Min = 1,
 		Max = 1000,
 		Default = 1000
 	})
-	Range = ProjectileAimbot:CreateSlider({
+	Range = AeroPA:CreateSlider({
 		Name = 'Range',
 		Min = 10,
 		Max = 500,
 		Default = 100,
 		Tooltip = 'Maximum distance for target locking'
 	})
-	TargetVisualiser = ProjectileAimbot:CreateToggle({
+	TargetVisualiser = AeroPA:CreateToggle({
 		Name = "Target Visualiser", 
 		Default = true
 	})
-	OtherProjectiles = ProjectileAimbot:CreateToggle({
+	OtherProjectiles = AeroPA:CreateToggle({
 		Name = 'Other Projectiles',
 		Default = true,
 		Function = function(call)
@@ -5481,7 +5720,7 @@ run(function()
 			end
 		end
 	})
-	Blacklist = ProjectileAimbot:CreateTextList({
+	Blacklist = AeroPA:CreateTextList({
 		Name = 'Blacklist',
 		Darker = true,
 		Default = {'telepearl'}
@@ -8608,6 +8847,42 @@ run(function()
 				end
 				
 				task.wait(0.1)
+			until not AutoKit.Enabled
+		end,
+		spirit_summoner = function()
+			repeat
+				if not entitylib.isAlive then
+					task.wait(0.1)
+					continue
+				end
+				
+				local hasStaff = false
+				for _, item in store.inventory.inventory.items do
+					if item.itemType == 'spirit_staff' then
+						hasStaff = true
+						break
+					end
+				end
+				
+				if hasStaff then
+					local spiritCount = lplr:GetAttribute('ReadySummonedAttackSpirits') or 0
+					if spiritCount < 10 then
+						local hasStone = false
+						for _, item in store.inventory.inventory.items do
+							if item.itemType == 'summon_stone' then
+								hasStone = true
+								break
+							end
+						end
+						
+						if hasStone and bedwars.AbilityController:canUseAbility('summon_attack_spirit') then
+							bedwars.AbilityController:useAbility('summon_attack_spirit')
+							task.wait(0.5)
+						end
+					end
+				end
+				
+				task.wait(0.2)
 			until not AutoKit.Enabled
 		end,
 		mage = function()
